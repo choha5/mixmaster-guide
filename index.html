@@ -155,6 +155,8 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .admin-box{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px}.admin-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .admin-list{display:grid;gap:8px;margin-top:12px;max-height:460px;overflow:auto}.admin-item{width:100%;text-align:left;border:1px solid var(--line);background:#101b2d;color:var(--text);border-radius:12px;padding:11px}
 .admin-item:hover{border-color:var(--accent)}.admin-item-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.admin-item small{display:block;color:var(--muted);margin-top:5px;line-height:1.45}
+.admin-view-tabs{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.admin-view-tabs button.active{border-color:var(--accent);color:#fff;background:rgba(55,179,255,.13)}
+.blocked-admin-item{border:1px solid rgba(255,107,129,.28);background:rgba(255,107,129,.045);border-radius:12px;padding:11px}.blocked-admin-item small{display:block;color:var(--muted);margin-top:5px;line-height:1.5}.blocked-admin-item .action-row{margin-top:9px}
 .backend-note{margin-bottom:14px;padding:11px 13px;border:1px solid rgba(134,168,255,.28);background:rgba(134,168,255,.07);border-radius:12px;color:#c7d4ff;font-size:12px;line-height:1.6}
 .hidden-honeypot{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;opacity:0!important}
 @media(max-width:900px){.inquiry-grid{grid-template-columns:1fr}}
@@ -304,7 +306,11 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
       <div id="adminArea" style="display:none">
         <div class="inquiry-grid" style="margin-top:14px">
           <div class="inquiry-card">
-            <div class="panel-title"><h3>전체 문의</h3><small id="adminCount"></small></div>
+            <div class="panel-title"><h3 id="adminListHeading">전체 문의</h3><small id="adminCount"></small></div>
+            <div class="admin-view-tabs">
+              <button class="secondary-btn active" id="adminAllTab">전체 문의</button>
+              <button class="secondary-btn" id="adminBlockedTab">차단 목록</button>
+            </div>
             <div class="admin-list" id="adminList"></div>
           </div>
           <div class="inquiry-card">
@@ -617,6 +623,7 @@ let currentInquiryAuth = null;
 let currentAdminTicket = null;
 let currentAdminCanBlock = false;
 let currentAdminBlocked = false;
+let adminListMode = "all";
 
 function setInquiryBackendNote(){
   const el=$("#inquiryBackendNote");
@@ -700,19 +707,61 @@ async function adminLogin(){
   if(!pw){alert("관리자 비밀번호를 입력해 주세요.");return;}
   sessionStorage.setItem("mm_admin_password",pw);
   try{
-    await loadAdminList();
+    await showAdminAll();
     $("#adminArea").style.display="block";$("#adminLogoutBtn").style.display="inline-block";$("#adminPassword").value="";
   }catch(e){sessionStorage.removeItem("mm_admin_password");$("#adminArea").style.display="none";alert(e.message);}
 }
 function adminLogout(){
-  sessionStorage.removeItem("mm_admin_password");currentAdminTicket=null;currentAdminCanBlock=false;currentAdminBlocked=false;$("#adminArea").style.display="none";$("#adminLogoutBtn").style.display="none";$("#adminThread").innerHTML="";$("#adminThreadTitle").textContent="문의 선택";$("#adminReplyBox").style.display="none";
+  sessionStorage.removeItem("mm_admin_password");currentAdminTicket=null;currentAdminCanBlock=false;currentAdminBlocked=false;adminListMode="all";$("#adminArea").style.display="none";$("#adminLogoutBtn").style.display="none";$("#adminThread").innerHTML="";$("#adminThreadTitle").textContent="문의 선택";$("#adminReplyBox").style.display="none";
+}
+function updateAdminListTabs(){
+  const all=$("#adminAllTab"),blocked=$("#adminBlockedTab");
+  if(all) all.classList.toggle("active",adminListMode==="all");
+  if(blocked) blocked.classList.toggle("active",adminListMode==="blocked");
+}
+async function showAdminAll(){
+  adminListMode="all";updateAdminListTabs();return await loadAdminList();
+}
+async function showAdminBlocked(){
+  adminListMode="blocked";updateAdminListTabs();return await loadBlockedList();
+}
+async function refreshAdminSidebar(){
+  return adminListMode==="blocked" ? await loadBlockedList() : await loadAdminList();
 }
 async function loadAdminList(){
   const data=await inqApi("/admin/list",{},true); const list=data.inquiries||[];
+  $("#adminListHeading").textContent="전체 문의";
   $("#adminCount").textContent=`${list.length}건`;
   $("#adminList").innerHTML=list.map(q=>`<button class="admin-item" data-admin-ticket="${esc(q.ticket_code)}"><div class="admin-item-top"><b>${esc(q.title)}</b><span>${inqStatus(q.status)}${inqBlockStatus(q.blocked)}</span></div><small>${esc(q.ticket_code)} · ${esc(q.nickname)} · ${esc(inqDate(q.updated_at||q.created_at))}</small></button>`).join("")||'<div class="empty">등록된 문의가 없습니다.</div>';
   $$('[data-admin-ticket]').forEach(b=>b.onclick=()=>loadAdminThread(b.dataset.adminTicket));
   return data;
+}
+async function loadBlockedList(){
+  const data=await inqApi("/admin/blocked",{},true); const list=data.blocked||[];
+  $("#adminListHeading").textContent="차단 목록";
+  $("#adminCount").textContent=`${list.length}명`;
+  $("#adminList").innerHTML=list.map(b=>`<div class="blocked-admin-item">
+    <div class="admin-item-top"><b>${esc(b.nickname||"차단 사용자")}</b><span class="status-chip blocked">문의차단</span></div>
+    <small>차단일 ${esc(inqDate(b.created_at))} · 관련 문의 ${Number(b.inquiry_count||0)}건</small>
+    <small>원인 문의 ${esc(b.source_ticket||"-")}${b.title?` · ${esc(b.title)}`:""}</small>
+    <small>사유: ${esc(b.reason||"관리자 문의 차단")}</small>
+    <div class="action-row">
+      ${b.source_ticket?`<button class="secondary-btn" data-blocked-thread="${esc(b.source_ticket)}">원인 문의 보기</button>`:""}
+      <button class="danger-btn" data-blocked-unblock="${esc(b.client_hash)}">차단 해제</button>
+    </div>
+  </div>`).join("")||'<div class="empty">차단된 사용자가 없습니다.</div>';
+  $$('[data-blocked-thread]').forEach(btn=>btn.onclick=()=>loadAdminThread(btn.dataset.blockedThread));
+  $$('[data-blocked-unblock]').forEach(btn=>btn.onclick=()=>adminUnblockHash(btn.dataset.blockedUnblock));
+  return data;
+}
+async function adminUnblockHash(clientHash){
+  if(!clientHash) return;
+  if(!confirm("이 사용자의 문의 차단을 해제할까요?")) return;
+  try{
+    await inqApi("/admin/unblock-hash",{client_hash:clientHash},true);
+    if(currentAdminTicket) await loadAdminThread(currentAdminTicket).catch(()=>{});
+    await loadBlockedList();
+  }catch(e){alert(e.message);}
 }
 async function loadAdminThread(ticket){
   try{
@@ -737,7 +786,7 @@ async function adminBlock(){
   if(!confirm("이 문의 작성자의 새 문의 및 추가 문의를 차단할까요?\n\n같은 인터넷 회선을 사용하는 사람이 있다면 함께 제한될 수 있습니다.")) return;
   try{
     await inqApi("/admin/block",{ticket_code:currentAdminTicket},true);
-    await loadAdminThread(currentAdminTicket);await loadAdminList();
+    await loadAdminThread(currentAdminTicket);await refreshAdminSidebar();
   }catch(e){alert(e.message);}
 }
 async function adminUnblock(){
@@ -745,7 +794,7 @@ async function adminUnblock(){
   if(!confirm("이 작성자의 문의 차단을 해제할까요?")) return;
   try{
     await inqApi("/admin/unblock",{ticket_code:currentAdminTicket},true);
-    await loadAdminThread(currentAdminTicket);await loadAdminList();
+    await loadAdminThread(currentAdminTicket);await refreshAdminSidebar();
   }catch(e){alert(e.message);}
 }
 async function adminReply(){
@@ -753,7 +802,7 @@ async function adminReply(){
   const btn=$("#adminReplyBtn");btn.disabled=true;btn.textContent="등록 중...";
   try{
     await inqApi("/admin/reply",{ticket_code:currentAdminTicket,body},true);$("#adminReply").value="";
-    await loadAdminThread(currentAdminTicket);await loadAdminList();
+    await loadAdminThread(currentAdminTicket);await refreshAdminSidebar();
   }catch(e){alert(e.message);}finally{btn.disabled=false;btn.textContent="답변 등록";}
 }
 function initInquiry(){
@@ -761,6 +810,7 @@ function initInquiry(){
   const last=localStorage.getItem("mm_last_ticket");if(last && !$("#inqTicket").value) $("#inqTicket").value=last;
   $("#inqCreateBtn").onclick=createInquiry;$("#inqLookupBtn").onclick=lookupInquiry;$("#inqFollowupBtn").onclick=sendFollowup;
   $("#adminLoginBtn").onclick=adminLogin;$("#adminLogoutBtn").onclick=adminLogout;$("#adminReplyBtn").onclick=adminReply;$("#adminBlockBtn").onclick=adminBlock;$("#adminUnblockBtn").onclick=adminUnblock;
+  $("#adminAllTab").onclick=showAdminAll;$("#adminBlockedTab").onclick=showAdminBlocked;
   $("#inqLookupPassword").addEventListener("keydown",e=>{if(e.key==="Enter")lookupInquiry()});
   if(sessionStorage.getItem("mm_admin_password")){adminLogin().catch(()=>{});}
 }
