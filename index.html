@@ -129,6 +129,35 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .site-footer{max-width:1440px;margin:0 auto;padding:0 22px 30px;text-align:center;color:var(--muted);font-size:13px}
 .site-footer b{color:var(--text);font-weight:700}
 
+
+/* 문의/Q&A */
+.inquiry-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.inquiry-card{border:1px solid var(--line);background:#0d1727;border-radius:15px;padding:16px}
+.inquiry-card h4{margin:0 0 5px;font-size:15px}.inquiry-card>p{margin:0 0 13px;color:var(--muted);font-size:12px;line-height:1.6}
+.form-grid{display:grid;gap:9px}.textarea{width:100%;min-height:140px;resize:vertical;border:1px solid var(--line);background:#0b1424;color:var(--text);border-radius:11px;padding:11px 12px;outline:none;font:inherit;line-height:1.6}
+.textarea:focus{border-color:var(--accent)}
+.action-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.primary-btn{border:1px solid rgba(90,215,196,.5);background:rgba(90,215,196,.12);color:#9de9dd;padding:9px 13px;border-radius:10px;font-weight:800}
+.primary-btn:hover{background:rgba(90,215,196,.18)}
+.secondary-btn{border:1px solid var(--line);background:#111c2d;color:#dce7f4;padding:9px 13px;border-radius:10px}
+.danger-btn{border:1px solid rgba(255,122,139,.35);background:rgba(255,122,139,.08);color:#ff9baa;padding:9px 13px;border-radius:10px}
+.inquiry-result{margin-top:12px;border:1px solid var(--line);background:#0a1322;border-radius:13px;padding:13px;font-size:12px;line-height:1.65}
+.inquiry-result.ok{border-color:rgba(90,215,196,.35)}.inquiry-result.err{border-color:rgba(255,122,139,.42);color:#ffc0c8}
+.ticket-code{font-size:18px;font-weight:900;color:var(--accent);letter-spacing:.04em}
+.thread{display:grid;gap:9px;margin-top:12px}.message{border:1px solid var(--line);border-radius:13px;padding:11px 12px;background:#101b2d}
+.message.admin{border-color:rgba(134,168,255,.35);background:rgba(134,168,255,.07)}
+.message-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:6px;font-size:11px;color:var(--muted)}
+.message-head b{color:#eaf2fa}.message.admin .message-head b{color:#bdccff}.message-body{font-size:13px;line-height:1.65;word-break:break-word}
+.status-chip{display:inline-flex;border-radius:999px;padding:4px 8px;border:1px solid var(--line);font-size:10px;font-weight:800}
+.status-chip.open{color:#f1d690;border-color:rgba(245,201,106,.35);background:rgba(245,201,106,.07)}
+.status-chip.answered{color:#9de9dd;border-color:rgba(90,215,196,.35);background:rgba(90,215,196,.07)}
+.admin-box{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px}.admin-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.admin-list{display:grid;gap:8px;margin-top:12px;max-height:460px;overflow:auto}.admin-item{width:100%;text-align:left;border:1px solid var(--line);background:#101b2d;color:var(--text);border-radius:12px;padding:11px}
+.admin-item:hover{border-color:var(--accent)}.admin-item-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.admin-item small{display:block;color:var(--muted);margin-top:5px;line-height:1.45}
+.backend-note{margin-bottom:14px;padding:11px 13px;border:1px solid rgba(134,168,255,.28);background:rgba(134,168,255,.07);border-radius:12px;color:#c7d4ff;font-size:12px;line-height:1.6}
+.hidden-honeypot{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;opacity:0!important}
+@media(max-width:900px){.inquiry-grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -140,6 +169,7 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
       <button class="tab" data-view="zones">사냥터 보기</button>
       <button class="tab" data-view="mix">믹스트리</button>
       <button class="tab" data-view="unconfirmed">검증 대기</button>
+      <button class="tab" data-view="contact">문의하기</button>
       <a class="top-link" href="https://www.mixmaster.co.kr/Event/list.do?type=ing" target="_blank" rel="noopener noreferrer">믹마 이벤트 ↗</a>
       <a class="top-link" href="https://cafe.naver.com/wcnet" target="_blank" rel="noopener noreferrer">믹마 카페 ↗</a>
     </nav>
@@ -226,6 +256,69 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
     </section>
   </main>
 
+
+  <main id="view-contact" class="view">
+    <section class="panel">
+      <div class="panel-title"><h3>비공개 문의</h3><small>문의 작성자와 제작자만 내용을 확인합니다</small></div>
+      <div class="backend-note" id="inquiryBackendNote">문의 시스템 연결 상태를 확인하는 중입니다.</div>
+      <div class="inquiry-grid">
+        <div class="inquiry-card">
+          <h4>문의 등록</h4>
+          <p>오류 제보, 데이터 수정, 기능 건의 등을 남길 수 있습니다. 등록 후 발급되는 문의번호와 비밀번호를 기억해 주세요.</p>
+          <div class="form-grid">
+            <input class="input" id="inqNickname" maxlength="30" placeholder="닉네임 (최대 30자)">
+            <input class="input" id="inqTitle" maxlength="100" placeholder="제목 (최대 100자)">
+            <textarea class="textarea" id="inqBody" maxlength="4000" placeholder="문의 내용 (최대 4000자)"></textarea>
+            <input class="input" id="inqPassword" type="password" minlength="4" maxlength="64" placeholder="문의 비밀번호 (4자 이상)">
+            <input class="hidden-honeypot" id="inqWebsite" tabindex="-1" autocomplete="off" aria-hidden="true" placeholder="website">
+          </div>
+          <div class="action-row"><button class="primary-btn" id="inqCreateBtn">문의 등록</button></div>
+          <div id="inqCreateResult"></div>
+        </div>
+
+        <div class="inquiry-card">
+          <h4>내 문의 확인</h4>
+          <p>문의번호와 작성할 때 정한 비밀번호로 본인의 문의/제작자 답변만 확인할 수 있습니다.</p>
+          <div class="form-grid">
+            <input class="input" id="inqTicket" maxlength="32" placeholder="문의번호 (예: MM-ABCDEFGH)">
+            <input class="input" id="inqLookupPassword" type="password" maxlength="64" placeholder="문의 비밀번호">
+          </div>
+          <div class="action-row"><button class="primary-btn" id="inqLookupBtn">내 문의 보기</button></div>
+          <div id="inqThreadResult"></div>
+          <div id="inqFollowupBox" style="display:none;margin-top:12px">
+            <textarea class="textarea" id="inqFollowup" maxlength="4000" placeholder="추가로 남길 내용"></textarea>
+            <div class="action-row"><button class="secondary-btn" id="inqFollowupBtn">추가 문의 보내기</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title"><h3>제작자 관리</h3><small>관리자 비밀번호가 있어야 전체 문의를 볼 수 있습니다</small></div>
+      <div class="admin-toolbar">
+        <input class="input" id="adminPassword" type="password" maxlength="128" placeholder="관리자 비밀번호" style="max-width:320px">
+        <button class="secondary-btn" id="adminLoginBtn">관리자 열기</button>
+        <button class="danger-btn" id="adminLogoutBtn" style="display:none">관리자 닫기</button>
+      </div>
+      <div id="adminArea" style="display:none">
+        <div class="inquiry-grid" style="margin-top:14px">
+          <div class="inquiry-card">
+            <div class="panel-title"><h3>전체 문의</h3><small id="adminCount"></small></div>
+            <div class="admin-list" id="adminList"></div>
+          </div>
+          <div class="inquiry-card">
+            <h4 id="adminThreadTitle">문의 선택</h4>
+            <div id="adminThread"></div>
+            <div id="adminReplyBox" style="display:none;margin-top:12px">
+              <textarea class="textarea" id="adminReply" maxlength="4000" placeholder="답변 내용"></textarea>
+              <div class="action-row"><button class="primary-btn" id="adminReplyBtn">답변 등록</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
   <div class="footer">데이터 기준: 믹마 족보 공유.xlsx · 외부 서버/라이브러리 없이 단일 HTML로 동작</div>
 </div>
 
@@ -243,6 +336,9 @@ const esc = v => String(v ?? "").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",
 const norm = s => String(s??"").trim().toLowerCase();
 const fmt = v => (v===null||v===undefined||v==="") ? "-" : String(v);
 const speciesClass = s => "sp-"+(s||"미확인");
+
+// 문의 백엔드 Worker 주소. Cloudflare Worker 배포 후 URL을 여기에 넣습니다.
+const INQUIRY_API_URL = "https://mixmaster-inquiry.pok-choha.workers.dev";
 
 const TIER_DATA = {"불멸가루곤킹":"god","불멸아누비스":"god","불멸헬파드":"god","불멸피닉스":"god","불멸커터맨티스":"god","불멸네펜데스":"god","불멸기와장군":"god","불멸디스트로이어":"god","다크볼":"0","흑룡":"0","적룡":"0","산타펭":"0","산타바우":"0","불멸잭키":"0","불멸아리만트":"0.5","불멸베레스":"0.5","불멸렉시":"0.5","불멸펠리크":"0.5","불멸로자":"0.5","불멸클로라":"0.5","불멸에스텔라":"0.5","불멸발리안":"0.5","폭주가루곤킹":"1","폭주아누비스":"1","폭주헬파드":"1","폭주피닉스":"1","폭주커터맨티스":"1","폭주네펜데스":"1","폭주기와장군":"1","폭주디스트로이어":"1","라이번":"1","불멸돈더":"1","불멸지브리":"1","해적메타레이":"1","해적라쿤첼":"1","해적겜블곤":"1","불멸해적레비아톤":"1","불멸해적투투":"1","불멸해적크래쉬":"1","불멸해적앵글러":"1","불멸가루곤":"1.5","불멸데스야누스":"1.5","불멸윈드걸":"1.5","불멸칼린엔젤":"1.5","불멸집게마왕":"1.5","불멸덤블러머":"1.5","불멸소울이터":"1.5","불멸메탈탱크":"1.5","불멸캡틴잘라사르":"1.5","불멸와일드투쓰":"1.5","불멸피의복수호":"1.5","불멸캡틴왈라비":"1.5","불멸미쿠":"1.5","불멸타스마":"1.5","불멸위치캣":"1.5","불멸사다귀":"1.5","불멸사케무사":"1.5","불멸드라키스":"1.5","불멸데빌키스":"1.5","불멸비스키스":"1.5","불멸버드키스":"1.5","불멸버그키스":"1.5","불멸플라키스":"1.5","불멸미스키스":"1.5","불멸메타키스":"1.5","폭주아리만트":"2","폭주베레스":"2","폭주렉시":"2","폭주펠리크":"2","폭주로자":"2","폭주클로라":"2","폭주에스텔라":"2","폭주발리안":"2","데미가루곤킹":"2.5","데미아누비스":"2.5","데미헬파드":"2.5","데미피닉스":"2.5","데미커터맨티스":"2.5","데미네펜데스":"2.5","데미기와장군":"2.5","데미디스트로이어":"2.5","해적레비아톤":"2.5","해적투투":"2.5","해적크래쉬":"2.5","해적앵글러":"2.5","시난아리만트":"3","시난베레스":"3","시난렉시":"3","시난펠리크":"3","시난로자":"3","시난클로라":"3","시난에스텔라":"3","시난발리안":"3","서펜키스":"3","이블키스":"3","타이키스":"3","크로키스":"3","비틀키스":"3","베지키스":"3","매지키스":"3","머신키스":"3","캡틴잘라사르":"3","와일드투쓰":"3","피의복수호":"3","캡틴왈라비":"3","불멸해적드레이크백작":"3.5","불멸해적오링턴제독":"3.5","불멸해적갑판장닉스":"3.5","불멸해적잭스왈로우":"3.5","불멸해적크라케":"3.5","불멸해적하르파":"3.5","불멸해적아쿠포네":"3.5","불멸해적메타빗":"3.5","미쿠":"4","타스마":"4","불멸파이어듀크":"4","불멸환영마녀":"4","불멸큐티캣":"4","불멸윙클레셔":"4","불멸티타니스":"4","불멸팅커벨":"4","불멸롱팔아이":"4","불멸솔브레이커":"4","네오아페리아":"4","네오헬하운드":"4","네오자카리스":"4","네오호루스":"4","네오드릴호넷":"4","네오지니":"4","네오아틀라스":"4","네오오시리안":"4","블루지브리":"4.5","레드지브리":"4.5","메탈골로나":"4.5","레드골로나":"4.5","폭주파이어드래곤":"5","폭주화강시":"5","폭주타샤벨":"5","폭주썬더버드":"5","폭주사이퍼":"5","폭주플로워":"5","폭주스노균":"5","폭주봄버군":"5","드라키스":"5","데빌키스":"5","비스키스":"5","버드키스":"5","버그키스":"5","플라키스":"5","미스키스":"5","메타키스":"5","폭주스내치":"5","폭주다크리벤":"5","폭주나굴이":"5","폭주데비글":"5","폭주루카누":"5","폭주님프":"5","폭주티어스":"5","폭주메탈타이거":"5","해적갑판장닉스":"5","해적잭스왈로우":"5","해적하르파":"5","해적메타빗":"5","뉴황금복도니":"5","폭주뉴돌프":"5","아페리아":"5.5","헬하운드":"5.5","자카리스":"5.5","호루스":"5.5","드릴호넷":"5.5","지니":"5.5","아틀라스":"5.5","오시리안":"5.5","네오그란샤":"5.5","네오밴시":"5.5","네오변이돼지":"5.5","네오로키런":"5.5","네오책벌레":"5.5","네오리모니":"5.5","네오닥터캘빈":"5.5","네오닥터켈빈":"5.5","네오메탈리카":"5.5","뉴레드가루곤":"5.5","폭주요르문":"6","폭주루시퍼":"6","폭주켈베로스":"6","폭주미카엘":"6","폭주호타루":"6","폭주뷔로사":"6","폭주제스터":"6","폭주발록":"6","네오쿠르미르":"6.5","네오오르데빌":"6.5","네오민트호냥":"6.5","네오하피":"6.5","네오부메이더":"6.5","네오스캠퍼":"6.5","네오삐에볼":"6.5","네오건스메쉬":"6.5","요르문":"6.5","루시퍼":"6.5","켈베로스":"6.5","미카엘":"6.5","호타루":"6.5","뷔로사":"6.5","제스터":"6.5","발록":"6.5","스내치":"6.5","다크리벤":"6.5","나굴이":"6.5","데비글":"6.5","루카누":"6.5","님프":"6.5","티어스":"6.5","메탈타이거":"6.5"};
 const TIER_ORDER = ["god","0","0.5","1","1.5","2","2.5","3","3.5","4","4.5","5","5.5","6","6.5"];
@@ -507,10 +603,135 @@ function renderUnconfirmed(){
   bindCoreLinks();
 }
 
+
+// ===== 비공개 문의 / Q&A =====
+const inqApiBase = () => String(INQUIRY_API_URL||"").trim().replace(/\/$/,"");
+const inqApiReady = () => /^https:\/\//i.test(inqApiBase());
+let currentInquiryAuth = null;
+let currentAdminTicket = null;
+
+function setInquiryBackendNote(){
+  const el=$("#inquiryBackendNote");
+  if(!el) return;
+  if(inqApiReady()){
+    el.innerHTML='<b>문의 시스템 연결됨</b> · 문의 내용은 공개 목록에 표시되지 않으며, 작성자는 문의번호+비밀번호로 본인 글만 확인합니다.';
+  }else{
+    el.innerHTML='<b>문의 시스템 준비본</b> · 아직 Cloudflare Worker 주소가 연결되지 않았습니다. 백엔드 설정 후 실제 문의 등록이 활성화됩니다.';
+  }
+}
+async function inqApi(path,body={},admin=false){
+  if(!inqApiReady()) throw new Error("문의 백엔드가 아직 연결되지 않았습니다.");
+  const headers={"Content-Type":"application/json"};
+  if(admin){
+    const pw=sessionStorage.getItem("mm_admin_password")||"";
+    if(!pw) throw new Error("관리자 비밀번호를 입력해 주세요.");
+    headers["X-Admin-Password"]=pw;
+  }
+  const res=await fetch(inqApiBase()+path,{method:"POST",headers,body:JSON.stringify(body)});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok || data.success===false) throw new Error(data.error||`요청 실패 (${res.status})`);
+  return data;
+}
+function inqDate(v){
+  if(!v) return "-";
+  const d=new Date(v); if(Number.isNaN(d.getTime())) return String(v);
+  return d.toLocaleString("ko-KR",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
+}
+function inqStatus(status){
+  return status==="answered"?'<span class="status-chip answered">답변완료</span>':'<span class="status-chip open">답변대기</span>';
+}
+function renderInquiryThread(target,data,showMeta=true){
+  const box=typeof target==="string"?$(target):target;
+  if(!box) return;
+  const q=data.inquiry||{}; const msgs=data.messages||[];
+  box.innerHTML=`<div class="inquiry-result ok">${showMeta?`<div><span class="ticket-code">${esc(q.ticket_code||"")}</span> ${inqStatus(q.status)}</div><div style="margin-top:6px"><b>${esc(q.title||"")}</b> · ${esc(q.nickname||"")} · ${esc(inqDate(q.created_at))}</div>`:""}<div class="thread">${msgs.map(m=>`<div class="message ${m.author_role==="admin"?"admin":""}"><div class="message-head"><b>${m.author_role==="admin"?"제작자 카일군":esc(q.nickname||"작성자")}</b><span>${esc(inqDate(m.created_at))}</span></div><div class="message-body">${esc(m.body||"").replace(/\n/g,"<br>")}</div></div>`).join("")||'<div class="muted">내용이 없습니다.</div>'}</div></div>`;
+}
+function inqError(target,msg){ const el=$(target); if(el) el.innerHTML=`<div class="inquiry-result err">${esc(msg)}</div>`; }
+
+async function createInquiry(){
+  const nickname=$("#inqNickname").value.trim(), title=$("#inqTitle").value.trim(), body=$("#inqBody").value.trim(), password=$("#inqPassword").value;
+  const website=$("#inqWebsite").value;
+  if(!nickname||!title||!body){inqError("#inqCreateResult","닉네임, 제목, 문의 내용을 모두 입력해 주세요.");return;}
+  if(password.length<4){inqError("#inqCreateResult","문의 비밀번호는 4자 이상으로 정해 주세요.");return;}
+  const btn=$("#inqCreateBtn"); btn.disabled=true; btn.textContent="등록 중...";
+  try{
+    const data=await inqApi("/inquiries/create",{nickname,title,body,password,website});
+    localStorage.setItem("mm_last_ticket",data.ticket_code||"");
+    $("#inqTicket").value=data.ticket_code||"";
+    $("#inqCreateResult").innerHTML=`<div class="inquiry-result ok"><b>문의가 등록되었습니다.</b><br>문의번호: <span class="ticket-code">${esc(data.ticket_code)}</span><br><span class="muted">이 번호와 문의 비밀번호가 있어야 다시 확인할 수 있습니다. 문의번호를 복사해 두세요.</span></div>`;
+    $("#inqTitle").value=""; $("#inqBody").value=""; $("#inqPassword").value="";
+  }catch(e){inqError("#inqCreateResult",e.message);}finally{btn.disabled=false;btn.textContent="문의 등록";}
+}
+async function lookupInquiry(){
+  const ticket=$("#inqTicket").value.trim().toUpperCase(), password=$("#inqLookupPassword").value;
+  if(!ticket||!password){inqError("#inqThreadResult","문의번호와 비밀번호를 입력해 주세요.");return;}
+  const btn=$("#inqLookupBtn");btn.disabled=true;btn.textContent="확인 중...";
+  try{
+    const data=await inqApi("/inquiries/lookup",{ticket_code:ticket,password});
+    currentInquiryAuth={ticket_code:ticket,password};
+    renderInquiryThread("#inqThreadResult",data,true);
+    $("#inqFollowupBox").style.display="block";
+  }catch(e){currentInquiryAuth=null;$("#inqFollowupBox").style.display="none";inqError("#inqThreadResult",e.message);}finally{btn.disabled=false;btn.textContent="내 문의 보기";}
+}
+async function sendFollowup(){
+  if(!currentInquiryAuth){inqError("#inqThreadResult","먼저 내 문의를 확인해 주세요.");return;}
+  const body=$("#inqFollowup").value.trim(); if(!body) return;
+  const btn=$("#inqFollowupBtn");btn.disabled=true;btn.textContent="전송 중...";
+  try{
+    await inqApi("/inquiries/message",{...currentInquiryAuth,body});
+    $("#inqFollowup").value="";
+    const data=await inqApi("/inquiries/lookup",currentInquiryAuth);
+    renderInquiryThread("#inqThreadResult",data,true);
+  }catch(e){alert(e.message);}finally{btn.disabled=false;btn.textContent="추가 문의 보내기";}
+}
+async function adminLogin(){
+  const pw=$("#adminPassword").value || sessionStorage.getItem("mm_admin_password")||"";
+  if(!pw){alert("관리자 비밀번호를 입력해 주세요.");return;}
+  sessionStorage.setItem("mm_admin_password",pw);
+  try{
+    await loadAdminList();
+    $("#adminArea").style.display="block";$("#adminLogoutBtn").style.display="inline-block";$("#adminPassword").value="";
+  }catch(e){sessionStorage.removeItem("mm_admin_password");$("#adminArea").style.display="none";alert(e.message);}
+}
+function adminLogout(){
+  sessionStorage.removeItem("mm_admin_password");currentAdminTicket=null;$("#adminArea").style.display="none";$("#adminLogoutBtn").style.display="none";$("#adminThread").innerHTML="";$("#adminThreadTitle").textContent="문의 선택";
+}
+async function loadAdminList(){
+  const data=await inqApi("/admin/list",{},true); const list=data.inquiries||[];
+  $("#adminCount").textContent=`${list.length}건`;
+  $("#adminList").innerHTML=list.map(q=>`<button class="admin-item" data-admin-ticket="${esc(q.ticket_code)}"><div class="admin-item-top"><b>${esc(q.title)}</b>${inqStatus(q.status)}</div><small>${esc(q.ticket_code)} · ${esc(q.nickname)} · ${esc(inqDate(q.updated_at||q.created_at))}</small></button>`).join("")||'<div class="empty">등록된 문의가 없습니다.</div>';
+  $$('[data-admin-ticket]').forEach(b=>b.onclick=()=>loadAdminThread(b.dataset.adminTicket));
+  return data;
+}
+async function loadAdminThread(ticket){
+  try{
+    const data=await inqApi("/admin/thread",{ticket_code:ticket},true); currentAdminTicket=ticket;
+    $("#adminThreadTitle").textContent=`${data.inquiry.ticket_code} · ${data.inquiry.title}`;
+    renderInquiryThread("#adminThread",data,false);$("#adminReplyBox").style.display="block";
+  }catch(e){alert(e.message);}
+}
+async function adminReply(){
+  if(!currentAdminTicket) return; const body=$("#adminReply").value.trim(); if(!body) return;
+  const btn=$("#adminReplyBtn");btn.disabled=true;btn.textContent="등록 중...";
+  try{
+    await inqApi("/admin/reply",{ticket_code:currentAdminTicket,body},true);$("#adminReply").value="";
+    await loadAdminThread(currentAdminTicket);await loadAdminList();
+  }catch(e){alert(e.message);}finally{btn.disabled=false;btn.textContent="답변 등록";}
+}
+function initInquiry(){
+  setInquiryBackendNote();
+  const last=localStorage.getItem("mm_last_ticket");if(last && !$("#inqTicket").value) $("#inqTicket").value=last;
+  $("#inqCreateBtn").onclick=createInquiry;$("#inqLookupBtn").onclick=lookupInquiry;$("#inqFollowupBtn").onclick=sendFollowup;
+  $("#adminLoginBtn").onclick=adminLogin;$("#adminLogoutBtn").onclick=adminLogout;$("#adminReplyBtn").onclick=adminReply;
+  $("#inqLookupPassword").addEventListener("keydown",e=>{if(e.key==="Enter")lookupInquiry()});
+  if(sessionStorage.getItem("mm_admin_password")){adminLogin().catch(()=>{});}
+}
+
 renderCoreTable();
 renderZones();
 renderUnconfirmed();
 refreshMixResults();
+initInquiry();
 </script>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "291a3c83ef9642a1a63da64a6c56fb3f"}'></script>
