@@ -11,7 +11,7 @@
   --muted:#97a8bd;--accent:#5ad7c4;--accent2:#86a8ff;--warn:#f5c96a;--danger:#ff7a8b;
   --shadow:0 18px 50px rgba(0,0,0,.24);
 }
-*{box-sizing:border-box} html{scroll-behavior:smooth}
+*{box-sizing:border-box} html{scroll-behavior:smooth;overflow-y:scroll;scrollbar-gutter:stable}
 body{margin:0;background:linear-gradient(180deg,#09101e 0%,#0b1020 45%,#0a1220 100%);color:var(--text);
 font-family:system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif;min-height:100vh}
 button,input,select{font:inherit}
@@ -37,7 +37,7 @@ color:#07121b;font-weight:900;box-shadow:0 8px 24px rgba(90,215,196,.18)}
 .notice{margin-top:12px;padding:11px 13px;background:rgba(245,201,106,.08);border:1px solid rgba(245,201,106,.25);border-radius:12px;color:#ecd99f;font-size:12px;line-height:1.55}
 .panel{padding:18px;margin-bottom:16px}
 .panel-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
-.panel-title h3{margin:0;font-size:16px}.panel-title small{color:var(--muted)}
+.panel-title h3{margin:0;font-size:16px}.panel-title small{color:var(--muted)}#coreCountLine{min-width:120px;text-align:right;font-variant-numeric:tabular-nums}.stat b{font-variant-numeric:tabular-nums}
 .controls{display:grid;grid-template-columns:minmax(240px,1.4fr) repeat(4,minmax(120px,.52fr));gap:10px}
 .input,.select{width:100%;border:1px solid var(--line);background:#0b1424;color:var(--text);border-radius:11px;padding:11px 12px;outline:none}
 .input:focus,.select:focus{border-color:var(--accent)}
@@ -387,14 +387,18 @@ function switchView(id){
 }
 $$(".tab").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 
+const coreStatsCache=new Map();
 function coreStats(name){
+  if(coreStatsCache.has(name)) return coreStatsCache.get(name);
   const c=coreMap.get(name);
-  return {
+  const st={
     recipes:(recipesByTarget.get(name)||[]).length,
     used:(usedBy.get(name)||[]).length,
     drops:(dropsByCore.get(name)||[]).length,
     dropAvailable:!!c?.dropAvailable
   };
+  coreStatsCache.set(name,st);
+  return st;
 }
 function renderCoreTable(){
   const q=norm($("#coreSearch").value), sp=$("#speciesFilter").value, region=$("#regionFilter").value, tier=$("#tierFilter").value, kind=$("#kindFilter").value;
@@ -431,10 +435,27 @@ function renderCoreTable(){
   }).join("") || `<tr><td colspan="9" class="empty">조건에 맞는 헨치가 없습니다.</td></tr>`;
   bindCoreLinks();
 }
-["coreSearch","speciesFilter","regionFilter","tierFilter","kindFilter"].forEach(id=>$("#"+id).addEventListener("input",renderCoreTable));
+let coreRenderTimer=0;
+function scheduleCoreRender(){
+  clearTimeout(coreRenderTimer);
+  coreRenderTimer=setTimeout(()=>{
+    coreRenderTimer=0;
+    renderCoreTable();
+  },70);
+}
+$("#coreSearch").addEventListener("input",scheduleCoreRender);
+["speciesFilter","regionFilter","tierFilter","kindFilter"].forEach(id=>$("#"+id).addEventListener("change",scheduleCoreRender));
 
+let coreLinkDelegationReady=false;
 function bindCoreLinks(){
-  $$("[data-core]").forEach(btn=>btn.onclick=(e)=>{e.stopPropagation();openCore(btn.dataset.core)});
+  if(coreLinkDelegationReady) return;
+  coreLinkDelegationReady=true;
+  document.addEventListener("click",e=>{
+    const btn=e.target.closest("[data-core]");
+    if(!btn) return;
+    e.stopPropagation();
+    openCore(btn.dataset.core);
+  });
 }
 function openCore(name){
   const c=coreMap.get(name)||{name,species:null,base:null,max:null};
@@ -800,9 +821,9 @@ function initInquiry(){
   if(sessionStorage.getItem("mm_admin_password")){adminLogin().catch(()=>{});}
 }
 
+bindCoreLinks();
 renderCoreTable();
-renderZones();
-refreshMixResults();
+// 숨겨진 탭은 실제로 열 때 렌더링하여 초기 메인 스레드 작업을 줄입니다.
 initInquiry();
 </script>
 <!-- Cloudflare Web Analytics -->
