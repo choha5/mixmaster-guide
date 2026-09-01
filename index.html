@@ -58,6 +58,8 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .core-link:hover{color:var(--accent)}
 .muted{color:var(--muted)}.empty{padding:28px;text-align:center;color:var(--muted)}
 .view{display:none}.view.active{display:block}
+/* CLS guard: initial core table is populated by JS after HTML parse. Reserve one viewport so the footer never starts inside the visible viewport and then gets pushed down. */
+#view-cores{min-height:100vh}
 .region-toolbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
 .region-btn{border:1px solid var(--line);background:#0d1727;color:var(--muted);padding:7px 10px;border-radius:10px}
 .region-btn.active{background:rgba(90,215,196,.11);border-color:rgba(90,215,196,.4);color:var(--accent)}
