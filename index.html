@@ -85,7 +85,9 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .tree-level-wrap label{font-size:11px;color:var(--muted);white-space:nowrap}
 .tree-level-input{width:92px;border:0;background:transparent;color:var(--text);outline:none;font-weight:800}
 .tree-help{margin:-4px 0 14px;color:var(--muted);font-size:11px;line-height:1.55}
-.tree{overflow:auto;padding:8px 0 18px}
+.tree{overflow:auto;padding:8px 0 18px;cursor:grab;scrollbar-gutter:stable}
+.tree.is-dragging{cursor:grabbing;user-select:none}
+.tree.is-dragging *{user-select:none}
 .tree-root{display:flex;justify-content:center;align-items:flex-start;min-width:max-content;padding:4px 28px 20px}
 .tree-branch{display:flex;flex-direction:column;align-items:center;position:relative;min-width:max-content}
 .tree-node{border:1px solid var(--line);background:#0d1727;border-radius:13px;padding:11px 12px;min-width:185px;max-width:270px;text-align:center;box-shadow:0 8px 20px rgba(0,0,0,.13)}
@@ -278,7 +280,7 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
         <select class="select" id="treeDepth" title="표시 단계" style="max-width:120px"><option>3단계</option><option>4단계</option><option selected>5단계</option><option>6단계</option><option>7단계</option><option>8단계</option></select>
         <button class="region-btn" id="treeGo">계산해서 펼치기</button>
       </div>
-      <div class="tree-help">엑셀의 목표 레벨 계산 방식과 같이, 높은 기렙 재료는 최대한 보호하고 낮은 재료를 먼저 올리는 방향으로 계산합니다. <b>보유 중인 재료는 기렙부터 사용할 수 있으며</b>, 그 레벨이 해당 코어의 직접 제작 최저 Lv보다 낮으면 <b>보유 필요</b>로 표시합니다. 고정레벨 코어는 해당 레벨에서 절대 변동하지 않습니다.</div>
+      <div class="tree-help">엑셀의 목표 레벨 계산 방식과 같이, 높은 기렙 재료는 최대한 보호하고 낮은 재료를 먼저 올리는 방향으로 계산합니다. <b>보유 중인 재료는 기렙부터 사용할 수 있으며</b>, 그 레벨이 해당 코어의 직접 제작 최저 Lv보다 낮으면 <b>보유 필요</b>로 표시합니다. 고정레벨 코어는 해당 레벨에서 절대 변동하지 않습니다. <b>트리 빈 공간을 마우스로 드래그하면 좌우·상하로 이동</b>할 수 있고, <b>Shift + 휠</b>로도 좌우 이동할 수 있습니다.</div>
       <div class="tree"><div class="tree-root" id="treeRoot"></div></div>
     </section>
   </main>
@@ -823,6 +825,45 @@ $("#treeGo").onclick=()=>{
   if(!Number.isFinite(Number($("#treeTargetLv").value))||Number($("#treeTargetLv").value)<1){alert("원하는 목표 레벨을 입력해 주세요.");return;}
   window.activeMix=n;renderTree();
 };
+
+// 믹스트리: 하단 가로 스크롤바까지 내려가지 않아도 빈 공간 드래그로 이동
+(()=>{
+  const treeViewport=document.querySelector(".tree");
+  if(!treeViewport) return;
+  let dragging=false,startX=0,startY=0,startLeft=0,startTop=0,pointerId=null;
+  const interactive=el=>el instanceof Element && !!el.closest("button,a,input,select,textarea,.tree-node");
+
+  treeViewport.addEventListener("pointerdown",e=>{
+    if(e.button!==0 || interactive(e.target)) return;
+    dragging=true;pointerId=e.pointerId;
+    startX=e.clientX;startY=e.clientY;
+    startLeft=treeViewport.scrollLeft;startTop=treeViewport.scrollTop;
+    treeViewport.classList.add("is-dragging");
+    try{treeViewport.setPointerCapture(pointerId)}catch(_){ }
+  });
+  treeViewport.addEventListener("pointermove",e=>{
+    if(!dragging || e.pointerId!==pointerId) return;
+    treeViewport.scrollLeft=startLeft-(e.clientX-startX);
+    treeViewport.scrollTop=startTop-(e.clientY-startY);
+    e.preventDefault();
+  });
+  const stopDrag=e=>{
+    if(!dragging || (e && e.pointerId!==undefined && e.pointerId!==pointerId)) return;
+    try{if(pointerId!==null) treeViewport.releasePointerCapture(pointerId)}catch(_){ }
+    dragging=false;pointerId=null;treeViewport.classList.remove("is-dragging");
+  };
+  treeViewport.addEventListener("pointerup",stopDrag);
+  treeViewport.addEventListener("pointercancel",stopDrag);
+  treeViewport.addEventListener("lostpointercapture",stopDrag);
+
+  treeViewport.addEventListener("wheel",e=>{
+    if(!e.shiftKey) return;
+    const delta=Math.abs(e.deltaY)>=Math.abs(e.deltaX)?e.deltaY:e.deltaX;
+    if(!delta) return;
+    treeViewport.scrollLeft+=delta;
+    e.preventDefault();
+  },{passive:false});
+})();
 
 
 // ===== 비공개 문의 / Q&A =====
