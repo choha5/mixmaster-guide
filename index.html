@@ -429,14 +429,26 @@ $("#statCore").textContent=D.meta.coreCount.toLocaleString();
 $("#statRecipe").textContent=D.meta.recipeCount.toLocaleString();
 $("#statDrop").textContent=D.meta.dropCoreCount.toLocaleString();
 
+let currentView="cores";
 function switchView(id){
-  $$(".tab").forEach(b=>b.classList.toggle("active",b.dataset.view===id));
-  $$(".view").forEach(v=>v.classList.toggle("active",v.id===`view-${id}`));
-  window.scrollTo({top:0,behavior:"smooth"});
-  if(id==="zones") renderZones();
-  if(id==="mix") refreshMixResults();
+  if(id===currentView) return;
+  const prevTab=document.querySelector(`.tab[data-view="${currentView}"]`);
+  const nextTab=document.querySelector(`.tab[data-view="${id}"]`);
+  const prevView=document.getElementById(`view-${currentView}`);
+  const nextView=document.getElementById(`view-${id}`);
+  if(prevTab) prevTab.classList.remove("active");
+  if(nextTab) nextTab.classList.add("active");
+  if(prevView) prevView.classList.remove("active");
+  if(nextView) nextView.classList.add("active");
+  currentView=id;
+  if(window.scrollY) window.scrollTo(0,0);
+  if(id==="zones" && !zonesRendered) renderZones();
+  if(id==="mix" && !mixRendered) refreshMixResults();
 }
-$$(".tab").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
+document.querySelector(".tabs").addEventListener("click",e=>{
+  const b=e.target.closest(".tab[data-view]");
+  if(b) switchView(b.dataset.view);
+});
 
 const coreStatsCache=new Map();
 function coreStats(name){
@@ -451,38 +463,13 @@ function coreStats(name){
   coreStatsCache.set(name,st);
   return st;
 }
-function renderCoreTable(){
-  const q=norm($("#coreSearch").value), sp=$("#speciesFilter").value, region=$("#regionFilter").value, tier=$("#tierFilter").value, range=$("#rangeFilter").value, kind=$("#kindFilter").value, sort=$("#sortFilter")?.value||"name";
-  let rows=D.cores.filter(c=>{
-    if(q && !norm(c.name).includes(q)) return false;
-    if(sp && c.species!==sp) return false;
-    const ds=dropsByCore.get(c.name)||[];
-    if(region && !ds.some(d=>d.region===region)) return false;
-    if(tier && tierOf(c.name)!==tier) return false;
-    if(range && c.range!==range) return false;
-    const st=coreStats(c.name);
-    if(kind==="drop" && !st.dropAvailable) return false;
-    if(kind==="mix" && !st.recipes) return false;
-    if(kind==="used" && !st.used) return false;
-    return true;
-  });
-  rows.sort((a,b)=>{
-    if(sort==="baseAsc"){
-      const av=Number.isFinite(Number(a.base))?Number(a.base):Infinity;
-      const bv=Number.isFinite(Number(b.base))?Number(b.base):Infinity;
-      if(av!==bv) return av-bv;
-    }else if(sort==="baseDesc"){
-      const av=Number.isFinite(Number(a.base))?Number(a.base):-Infinity;
-      const bv=Number.isFinite(Number(b.base))?Number(b.base):-Infinity;
-      if(av!==bv) return bv-av;
-    }
-    return a.name.localeCompare(b.name,"ko");
-  });
-  $("#coreCountLine").textContent=`검색 결과 ${rows.length.toLocaleString()}개`;
-  $("#coreBody").innerHTML=rows.map(c=>{
-    const st=coreStats(c.name), ds=dropsByCore.get(c.name)||[];
-    const firstDrop=ds[0] ? `${ds[0].region}${ds[0].sub?` · ${ds[0].sub}`:""}` : "-";
-    return `<tr>
+
+// 검색 때마다 852개 행의 HTML/득코 정보를 다시 계산하지 않도록 1회 캐시합니다.
+const CORE_VIEW=D.cores.map(c=>{
+  const st=coreStats(c.name), ds=dropsByCore.get(c.name)||[];
+  const firstDrop=ds[0] ? `${ds[0].region}${ds[0].sub?` · ${ds[0].sub}`:""}` : "-";
+  const regionSet=new Set(ds.map(d=>d.region).filter(Boolean));
+  const rowHtml=`<tr>
       <td><div class="core-name-wrap">${henchImg(c.name,"hench-img core-thumb")}<button class="core-link" data-core="${esc(c.name)}">${esc(c.name)}</button></div></td>
       <td>${tierOf(c.name)?`<span class="badge tier">${esc(tierLabel(tierOf(c.name)))}</span>`:"<span class='muted'>-</span>"}</td>
       <td><span class="sp ${speciesClass(c.species)}">${esc(c.species||"미확인")}</span></td>
@@ -492,18 +479,54 @@ function renderCoreTable(){
       <td>${st.recipes?`<span class="badge recipe">${st.recipes}식</span>`:"<span class='muted'>-</span>"}</td>
       <td>${st.used?`${st.used}개 조합`:"-"}</td><td class="muted">${esc(firstDrop)}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="10" class="empty">조건에 맞는 헨치가 없습니다.</td></tr>`;
+  return {c,st,nameNorm:norm(c.name),regionSet,rowHtml};
+});
+const CORE_SORTED={
+  name:[...CORE_VIEW].sort((a,b)=>a.c.name.localeCompare(b.c.name,"ko")),
+  baseAsc:[...CORE_VIEW].sort((a,b)=>{
+    const av=Number.isFinite(Number(a.c.base))?Number(a.c.base):Infinity;
+    const bv=Number.isFinite(Number(b.c.base))?Number(b.c.base):Infinity;
+    return av!==bv?av-bv:a.c.name.localeCompare(b.c.name,"ko");
+  }),
+  baseDesc:[...CORE_VIEW].sort((a,b)=>{
+    const av=Number.isFinite(Number(a.c.base))?Number(a.c.base):-Infinity;
+    const bv=Number.isFinite(Number(b.c.base))?Number(b.c.base):-Infinity;
+    return av!==bv?bv-av:a.c.name.localeCompare(b.c.name,"ko");
+  })
+};
+let lastCoreRenderKey="";
+function renderCoreTable(){
+  const q=norm($("#coreSearch").value), sp=$("#speciesFilter").value, region=$("#regionFilter").value, tier=$("#tierFilter").value, range=$("#rangeFilter").value, kind=$("#kindFilter").value, sort=$("#sortFilter")?.value||"name";
+  const key=[q,sp,region,tier,range,kind,sort].join("\u0001");
+  if(key===lastCoreRenderKey) return;
+  lastCoreRenderKey=key;
+  const source=CORE_SORTED[sort]||CORE_SORTED.name;
+  const rows=[];
+  for(const v of source){
+    const c=v.c, st=v.st;
+    if(q && !v.nameNorm.includes(q)) continue;
+    if(sp && c.species!==sp) continue;
+    if(region && !v.regionSet.has(region)) continue;
+    if(tier && tierOf(c.name)!==tier) continue;
+    if(range && c.range!==range) continue;
+    if(kind==="drop" && !st.dropAvailable) continue;
+    if(kind==="mix" && !st.recipes) continue;
+    if(kind==="used" && !st.used) continue;
+    rows.push(v);
+  }
+  $("#coreCountLine").textContent=`검색 결과 ${rows.length.toLocaleString()}개`;
+  $("#coreBody").innerHTML=rows.length?rows.map(v=>v.rowHtml).join(""):`<tr><td colspan="10" class="empty">조건에 맞는 헨치가 없습니다.</td></tr>`;
   bindCoreLinks();
 }
-let coreRenderTimer=0;
+let coreRenderRaf=0;
 function scheduleCoreRender(){
-  clearTimeout(coreRenderTimer);
-  coreRenderTimer=setTimeout(()=>{
-    coreRenderTimer=0;
+  if(coreRenderRaf) cancelAnimationFrame(coreRenderRaf);
+  coreRenderRaf=requestAnimationFrame(()=>{
+    coreRenderRaf=0;
     renderCoreTable();
-  },70);
+  });
 }
-$("#coreSearch").addEventListener("input",scheduleCoreRender);
+$("#coreSearch").addEventListener("input",scheduleCoreRender,{passive:true});
 ["speciesFilter","regionFilter","tierFilter","rangeFilter","kindFilter","sortFilter"].forEach(id=>$("#"+id).addEventListener("change",scheduleCoreRender));
 
 let coreLinkDelegationReady=false;
@@ -571,10 +594,16 @@ $("#drawerBackdrop").onclick=closeDrawer;
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer()});
 
 let activeRegion=regions[0]||"";
+let zonesRendered=false;
+const dropsByRegion=new Map();
+for(const d of D.drops){
+  if(!dropsByRegion.has(d.region)) dropsByRegion.set(d.region,[]);
+  dropsByRegion.get(d.region).push(d);
+}
 function renderZones(){
+  zonesRendered=true;
   $("#regionButtons").innerHTML=regions.map(r=>`<button class="region-btn ${r===activeRegion?"active":""}" data-region="${esc(r)}">${esc(r)}</button>`).join("");
-  $$("#regionButtons [data-region]").forEach(b=>b.onclick=()=>{activeRegion=b.dataset.region;renderZones()});
-  const rows=D.drops.filter(d=>d.region===activeRegion);
+  const rows=dropsByRegion.get(activeRegion)||[];
   const groups=new Map();
   for(const d of rows){const key=d.sub||"세부 지역 미표기";if(!groups.has(key))groups.set(key,[]);groups.get(key).push(d);}
   $("#zoneGrid").innerHTML=[...groups.entries()].map(([sub,arr])=>`<div class="zone"><h4>${esc(sub)} <span class="muted">· ${arr.length}</span></h4><div class="core-chips">${
@@ -582,19 +611,44 @@ function renderZones(){
   }</div></div>`).join("")||`<div class="empty">기록이 없습니다.</div>`;
   bindCoreLinks();
 }
+$("#regionButtons").addEventListener("click",e=>{
+  const b=e.target.closest("[data-region]");
+  if(!b || b.dataset.region===activeRegion) return;
+  activeRegion=b.dataset.region;
+  renderZones();
+});
 
 
 
+const MIX_NAMES=[...recipesByTarget.keys()].sort((a,b)=>a.localeCompare(b,"ko"));
+const MIX_NAME_NORM=new Map(MIX_NAMES.map(n=>[n,norm(n)]));
+let mixRendered=false;
+let lastMixQuery=null;
 function refreshMixResults(){
+  mixRendered=true;
   const q=norm($("#mixSearch").value);
-  let names=[...recipesByTarget.keys()].filter(n=>!q||norm(n).includes(q)).sort((a,b)=>a.localeCompare(b,"ko")).slice(0,180);
+  if(q===lastMixQuery && $("#mixResultList").childElementCount) return;
+  lastMixQuery=q;
+  const names=[];
+  for(const n of MIX_NAMES){
+    if(!q||MIX_NAME_NORM.get(n).includes(q)) names.push(n);
+    if(names.length>=180) break;
+  }
   $("#mixResultList").innerHTML=names.map(n=>`<button class="search-item ${n===window.activeMix?"active":""}" data-target="${esc(n)}">${henchImg(n,"hench-img search-thumb")}<span class="search-item-text">${esc(n)} <span class="muted">· ${(recipesByTarget.get(n)||[]).length}식</span></span></button>`).join("");
-  $$("#mixResultList [data-target]").forEach(b=>b.onclick=()=>selectMix(b.dataset.target));
   if(!window.activeMix && names[0]) selectMix(names[0]);
 }
-$("#mixSearch").addEventListener("input",refreshMixResults);
+$("#mixResultList").addEventListener("click",e=>{
+  const b=e.target.closest("[data-target]");
+  if(b) selectMix(b.dataset.target);
+});
+let mixSearchRaf=0;
+$("#mixSearch").addEventListener("input",()=>{
+  if(mixSearchRaf) cancelAnimationFrame(mixSearchRaf);
+  mixSearchRaf=requestAnimationFrame(()=>{mixSearchRaf=0;lastMixQuery=null;refreshMixResults();});
+},{passive:true});
 function selectMix(name){
   window.activeMix=name;
+  lastMixQuery=null;
   refreshMixResults();
   const rs=recipesByTarget.get(name)||[];
   $("#mixDetailTitle").textContent=name;
