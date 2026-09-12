@@ -399,6 +399,17 @@ const FIXED_LEVEL_CORES = new Map([
 const fixedLevelOf = name => FIXED_LEVEL_CORES.has(name) ? FIXED_LEVEL_CORES.get(name) : null;
 const isFixedLevelCore = name => FIXED_LEVEL_CORES.has(name);
 
+// 믹스 단계는 대상 헨치의 기렙 기준. 1~20=1단 ... 161~180=9단, 181 이상=10단(최종 단계).
+function mixStageOfBase(base){
+  const n=Number(base);
+  if(!Number.isFinite(n) || n < 1) return null;
+  return Math.min(10, Math.ceil(n/20));
+}
+function mixStageLabel(base){
+  const stage=mixStageOfBase(base);
+  return stage==null ? "-" : `${stage}단`;
+}
+
 const coreMap = new Map(D.cores.map(c=>[c.name,c]));
 const recipesByTarget = new Map(), usedBy = new Map(), dropsByCore = new Map(), materialLocs = new Map();
 for(const r of D.recipes){
@@ -555,11 +566,13 @@ function openCore(name){
       ${tierOf(name)?`<span class="badge tier">${esc(tierLabel(tierOf(name)))}</span>`:""}
       ${c.range==="장코"?`<span class="badge range-long" title="내부 공격거리 값 ${c.rangeValue}">장코 · 장거리</span>`:`<span class="badge range-short" title="내부 공격거리 값 ${c.rangeValue}">단코 · 단거리</span>`}
       ${c.dropAvailable?`<span class="badge drop">득코 O${ds.length?` · ${ds.length}곳`:""}</span>`:`<span class="badge">득코 X</span>`}
+      ${mixStageOfBase(c.base)!=null?`<span class="badge recipe">믹스 ${esc(mixStageLabel(c.base))}</span>`:""}
       ${rs.length?`<span class="badge recipe">조합식 ${rs.length}</span>`:""}
     </div>
     <div class="detail-grid">
       <div class="kpi"><span>티어</span><b>${esc(tierLabel(tierOf(name)))}</b></div>
       <div class="kpi"><span>기렙</span><b>${esc(fmt(c.base))}</b></div>
+      <div class="kpi"><span>믹스 단계</span><b>${esc(mixStageLabel(c.base))}</b></div>
       <div class="kpi"><span>기본 최대 Lv</span><b>${esc(fmt(c.max))}</b></div>
       <div class="kpi"><span>공격거리</span><b>${esc(c.range||"-")}</b></div>
       <div class="kpi"><span>상위 조합 사용</span><b>${us.length}</b></div>
@@ -580,12 +593,14 @@ function openCore(name){
   bindCoreLinks();
 }
 function recipeHtml(r){
+  const targetBase=r.targetBase ?? coreMap.get(r.target)?.base;
+  const targetMixStage=mixStageOfBase(targetBase);
   return `<div class="recipe-card">
-    <div class="recipe-head"><div class="recipe-target-line">${henchImg(r.target,"hench-img recipe-target-img")}<b>${esc(r.target)} · ${esc(fmt(r.order))}번 조합</b></div>${r.minLv!=null?`<span class="badge">제작 최소 Lv ${esc(r.minLv)}</span>`:""}</div>
+    <div class="recipe-head"><div class="recipe-target-line">${henchImg(r.target,"hench-img recipe-target-img")}<b>${esc(r.target)} · ${esc(fmt(r.order))}번 조합</b></div><div>${targetMixStage!=null?`<span class="badge recipe">믹스 ${esc(mixStageLabel(targetBase))}</span> `:""}${r.minLv!=null?`<span class="badge">제작 최소 Lv ${esc(r.minLv)}</span>`:""}</div></div>
     <div class="recipe-formula">${esc(r.recipe||`${r.mat1||"?"} + ${r.mat2||"?"}`)}</div>
     <div class="materials">
-      <div class="material"><div class="material-main">${r.mat1?henchImg(r.mat1,"hench-img material-img"):""}<div class="material-text"><button ${r.mat1&&coreMap.has(r.mat1)?`data-core="${esc(r.mat1)}"`:""}>${esc(r.mat1||"?")}</button> ${r.stage1!=null?`<span class="badge">${esc(fmt(r.stage1))}단</span>`:""}<small>기렙 ${esc(fmt(r.base1))}${r.loc1?`<br>${esc(r.loc1)}`:""}</small></div></div></div>
-      <div class="material"><div class="material-main">${r.mat2?henchImg(r.mat2,"hench-img material-img"):""}<div class="material-text"><button ${r.mat2&&coreMap.has(r.mat2)?`data-core="${esc(r.mat2)}"`:""}>${esc(r.mat2||"?")}</button> ${r.stage2!=null?`<span class="badge">${esc(fmt(r.stage2))}단</span>`:""}<small>기렙 ${esc(fmt(r.base2))}${r.loc2?`<br>${esc(r.loc2)}`:""}</small></div></div></div>
+      <div class="material"><div class="material-main">${r.mat1?henchImg(r.mat1,"hench-img material-img"):""}<div class="material-text"><button ${r.mat1&&coreMap.has(r.mat1)?`data-core="${esc(r.mat1)}"`:""}>${esc(r.mat1||"?")}</button> ${r.stage1!=null?`<span class="badge">인챈트 ${esc(fmt(r.stage1))}단</span>`:""}<small>기렙 ${esc(fmt(r.base1))}${r.loc1?`<br>${esc(r.loc1)}`:""}</small></div></div></div>
+      <div class="material"><div class="material-main">${r.mat2?henchImg(r.mat2,"hench-img material-img"):""}<div class="material-text"><button ${r.mat2&&coreMap.has(r.mat2)?`data-core="${esc(r.mat2)}"`:""}>${esc(r.mat2||"?")}</button> ${r.stage2!=null?`<span class="badge">인챈트 ${esc(fmt(r.stage2))}단</span>`:""}<small>기렙 ${esc(fmt(r.base2))}${r.loc2?`<br>${esc(r.loc2)}`:""}</small></div></div></div>
     </div>
   </div>`;
 }
@@ -652,7 +667,8 @@ function selectMix(name){
   refreshMixResults();
   const rs=recipesByTarget.get(name)||[];
   $("#mixDetailTitle").textContent=name;
-  $("#mixDetailMeta").textContent=`${rs.length}개 조합식 · 기렙 ${fmt(coreMap.get(name)?.base)}`;
+  const mixBase=coreMap.get(name)?.base;
+  $("#mixDetailMeta").textContent=`${rs.length}개 조합식 · 기렙 ${fmt(mixBase)} · 믹스 ${mixStageLabel(mixBase)}`;
   $("#mixRecipeList").innerHTML=rs.map(recipeHtml).join("");
   bindCoreLinks();
   $("#treeTarget").value=name;
