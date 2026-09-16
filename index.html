@@ -66,6 +66,7 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .region-btn.active{background:rgba(90,215,196,.11);border-color:rgba(90,215,196,.4);color:var(--accent)}
 .zone-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .zone{border:1px solid var(--line);background:#0e1726;border-radius:14px;padding:14px}
+.zone,.recipe-card,.list-item{content-visibility:auto;contain-intrinsic-size:auto 80px}
 .zone h4{margin:0 0 10px;font-size:14px}.core-chips{display:flex;flex-wrap:wrap;gap:7px}
 .chip{border:1px solid var(--line);background:#111d30;color:#dce7f4;padding:6px 8px;border-radius:9px;font-size:11px}
 .chip:hover{border-color:var(--accent);color:var(--accent)}
@@ -378,7 +379,7 @@ const HENCH_IMG = {"DJ브라키":"client_hench/mh633.png","DK가루곤":"client_
 function henchImg(name, cls="hench-img", lazy=true){
   const src=HENCH_IMG[name];
   if(!src) return "";
-  return `<img class="${cls}" src="${src}" alt="${esc(name)}" ${lazy?'loading="lazy"':''} draggable="false">`;
+  return `<img class="${cls}" src="${src}" alt="${esc(name)}" ${lazy?'loading="lazy" fetchpriority="low"':''} decoding="async" draggable="false">`;
 }
 const norm = s => String(s??"").trim().toLowerCase();
 const fmt = v => (v===null||v===undefined||v==="") ? "-" : String(v);
@@ -455,6 +456,11 @@ $("#statRecipe").textContent=D.meta.recipeCount.toLocaleString();
 $("#statDrop").textContent=D.meta.dropCoreCount.toLocaleString();
 
 let currentView="cores";
+let viewWorkTimer=0;
+function runViewWork(id){
+  if(id==="zones" && !zonesRendered) renderZones();
+  if(id==="mix" && !mixRendered) refreshMixResults();
+}
 function switchView(id){
   if(id===currentView) return;
   const prevTab=document.querySelector(`.tab[data-view="${currentView}"]`);
@@ -466,9 +472,11 @@ function switchView(id){
   if(prevView) prevView.classList.remove("active");
   if(nextView) nextView.classList.add("active");
   currentView=id;
-  if(window.scrollY) window.scrollTo(0,0);
-  if(id==="zones" && !zonesRendered) renderZones();
-  if(id==="mix" && !mixRendered) refreshMixResults();
+
+  // 탭 클릭의 다음 페인트를 먼저 허용한 뒤 무거운 첫 렌더를 분리합니다.
+  if(window.scrollY) requestAnimationFrame(()=>window.scrollTo(0,0));
+  if(viewWorkTimer) clearTimeout(viewWorkTimer);
+  viewWorkTimer=setTimeout(()=>{viewWorkTimer=0;runViewWork(id);},0);
 }
 document.querySelector(".tabs").addEventListener("click",e=>{
   const b=e.target.closest(".tab[data-view]");
@@ -519,7 +527,18 @@ const CORE_SORTED={
     return av!==bv?bv-av:a.c.name.localeCompare(b.c.name,"ko");
   })
 };
+const CORE_BY_NAME=new Map(CORE_VIEW.map(v=>[v.c.name,v]));
+let coreRowsMaterialized=false;
 let lastCoreRenderKey="";
+function captureCoreRows(){
+  if(coreRowsMaterialized) return;
+  for(const tr of $("#coreBody").children){
+    const name=tr.querySelector?.("[data-core]")?.dataset?.core;
+    const v=name?CORE_BY_NAME.get(name):null;
+    if(v) v.rowEl=tr;
+  }
+  coreRowsMaterialized=CORE_VIEW.every(v=>v.rowEl);
+}
 function renderCoreTable(){
   const q=norm($("#coreSearch").value), sp=$("#speciesFilter").value, region=$("#regionFilter").value, coreGroup=$("#coreGroupFilter").value, tier=$("#tierFilter").value, range=$("#rangeFilter").value, kind=$("#kindFilter").value, sort=$("#sortFilter")?.value||"name";
   const key=[q,sp,region,coreGroup,tier,range,kind,sort].join("\u0001");
@@ -541,19 +560,34 @@ function renderCoreTable(){
     rows.push(v);
   }
   $("#coreCountLine").textContent=`검색 결과 ${rows.length.toLocaleString()}개`;
-  $("#coreBody").innerHTML=rows.length?rows.map(v=>v.rowHtml).join(""):`<tr><td colspan="9" class="empty">조건에 맞는 헨치가 없습니다.</td></tr>`;
+  const body=$("#coreBody");
+
+  if(!coreRowsMaterialized){
+    // 최초 1회만 HTML을 만들고 이후 검색/필터에서는 같은 <tr> 노드를 재사용합니다.
+    body.innerHTML=rows.length?rows.map(v=>v.rowHtml).join(""):`<tr><td colspan="9" class="empty">조건에 맞는 헨치가 없습니다.</td></tr>`;
+    captureCoreRows();
+  }else if(rows.length){
+    const frag=document.createDocumentFragment();
+    for(const v of rows) if(v.rowEl) frag.appendChild(v.rowEl);
+    body.replaceChildren(frag);
+  }else{
+    const tr=document.createElement("tr");
+    tr.innerHTML='<td colspan="9" class="empty">조건에 맞는 헨치가 없습니다.</td>';
+    body.replaceChildren(tr);
+  }
   bindCoreLinks();
 }
-let coreRenderRaf=0;
-function scheduleCoreRender(){
-  if(coreRenderRaf) cancelAnimationFrame(coreRenderRaf);
-  coreRenderRaf=requestAnimationFrame(()=>{
-    coreRenderRaf=0;
+let coreRenderTimer=0;
+function scheduleCoreRender(delay=0){
+  if(coreRenderTimer) clearTimeout(coreRenderTimer);
+  coreRenderTimer=setTimeout(()=>{
+    coreRenderTimer=0;
     renderCoreTable();
-  });
+  },delay);
 }
-$("#coreSearch").addEventListener("input",scheduleCoreRender,{passive:true});
-["speciesFilter","regionFilter","coreGroupFilter","tierFilter","rangeFilter","kindFilter","sortFilter"].forEach(id=>$("#"+id).addEventListener("change",scheduleCoreRender));
+// 타이핑 이벤트 자체는 즉시 페인트시키고, 실제 853행 필터 작업은 아주 짧게 디바운스합니다.
+$("#coreSearch").addEventListener("input",()=>scheduleCoreRender(70),{passive:true});
+["speciesFilter","regionFilter","coreGroupFilter","tierFilter","rangeFilter","kindFilter","sortFilter"].forEach(id=>$("#"+id).addEventListener("change",()=>scheduleCoreRender(0)));
 
 let coreLinkDelegationReady=false;
 function bindCoreLinks(){
@@ -1080,7 +1114,17 @@ function initInquiry(){
 
 bindCoreLinks();
 renderCoreTable();
-// 숨겨진 탭은 실제로 열 때 렌더링하여 초기 메인 스레드 작업을 줄입니다.
+// 숨겨진 탭은 클릭 이벤트 안에서 바로 무겁게 그리지 않습니다.
+// 브라우저가 완전히 한가할 때만 가볍게 미리 준비하여 실제 탭 클릭 INP를 낮춥니다.
+const warmHiddenViews=()=>{
+  if(!zonesRendered) renderZones();
+  if(!mixRendered) refreshMixResults();
+};
+if("requestIdleCallback" in window){
+  requestIdleCallback(warmHiddenViews,{timeout:3500});
+}else{
+  setTimeout(warmHiddenViews,1800);
+}
 initInquiry();
 </script>
 <!-- Cloudflare Web Analytics -->
