@@ -190,6 +190,37 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .img-placeholder{width:68px;height:68px;margin:0 auto 7px;border:1px dashed rgba(151,168,189,.28);border-radius:12px;display:grid;place-items:center;color:#64758a;font-size:10px;background:rgba(7,14,26,.22)}
 @media(max-width:560px){.tree-img{width:60px;height:60px}.material-img{width:50px;height:50px}.detail-img{width:82px;height:82px;flex-basis:82px}.core-thumb{width:36px;height:36px;flex-basis:36px}}
 
+
+/* ===== 내 헨치 저장 (localStorage) ===== */
+.save-btn{
+  border:1px solid rgba(245,201,106,.38);background:rgba(245,201,106,.06);color:#9aa6b2;
+  width:30px;height:30px;border-radius:9px;display:inline-grid;place-items:center;
+  padding:0;font-size:17px;line-height:1;flex:0 0 30px;
+}
+.save-btn:hover{border-color:rgba(245,201,106,.7);color:#f5c96a;background:rgba(245,201,106,.10)}
+.save-btn.saved{color:#f5c96a;background:rgba(245,201,106,.13);border-color:rgba(245,201,106,.58)}
+.saved-tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;margin-left:4px;padding:0 5px;border-radius:999px;background:rgba(245,201,106,.13);color:#f5d98f;font-size:10px;font-weight:900}
+.saved-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.saved-summary{margin-top:12px;color:var(--muted);font-size:12px;line-height:1.6}
+.saved-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.saved-card{border:1px solid var(--line);background:#0e1726;border-radius:14px;padding:14px}
+.saved-head{display:flex;align-items:center;gap:11px}
+.saved-head .saved-head-text{min-width:0;flex:1}
+.saved-head .saved-name{border:0;background:none;color:#fff;padding:0;font-weight:850;font-size:15px;text-align:left}
+.saved-head .saved-name:hover{color:var(--accent)}
+.saved-thumb{width:54px;height:54px;flex:0 0 54px}
+.saved-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.saved-section{margin-top:12px;padding-top:10px;border-top:1px solid rgba(38,54,79,.72)}
+.saved-section b{display:block;font-size:12px;margin-bottom:6px}
+.saved-locs{display:flex;gap:6px;flex-wrap:wrap}
+.saved-loc{border:1px solid var(--line);background:#101b2d;border-radius:8px;padding:5px 7px;font-size:11px;color:#cbd8e7}
+.saved-area-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.saved-area{border:1px solid var(--line);background:#0e1726;border-radius:14px;padding:14px}
+.saved-area h4{margin:0 0 9px;font-size:14px}
+.saved-area .core-chips{gap:7px}
+.saved-empty{padding:38px 16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+@media(max-width:900px){.saved-grid,.saved-area-grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -200,6 +231,7 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
       <button class="tab active" data-view="cores">헨치 찾기</button>
       <button class="tab" data-view="zones">사냥터 보기</button>
       <button class="tab" data-view="mix">믹스트리</button>
+      <button class="tab" data-view="saved">내 헨치 <span class="saved-tab-count" id="savedTabCount">0</span></button>
       <button class="tab" data-view="contact">문의하기</button>
       <a class="top-link" href="https://www.mixmaster.co.kr/Event/list.do?type=ing" target="_blank" rel="noopener noreferrer">믹마 이벤트 ↗</a>
       <a class="top-link" href="https://cafe.naver.com/wcnet" target="_blank" rel="noopener noreferrer">믹마 카페 ↗</a>
@@ -249,6 +281,25 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
     </section>
     <section class="panel">
       <div class="table-wrap"><table><thead><tr><th>헨치</th><th>티어</th><th>종족</th><th>공격거리</th><th>기렙</th><th>기본 최대Lv</th><th>득코</th><th>코어그룹</th><th>대표 출현 위치</th></tr></thead><tbody id="coreBody"></tbody></table></div>
+    </section>
+  </main>
+
+
+  <main id="view-saved" class="view">
+    <section class="panel">
+      <div class="panel-title">
+        <h3>내 헨치</h3>
+        <small>이 브라우저에만 저장 · 로그인 필요 없음</small>
+      </div>
+      <div class="saved-toolbar">
+        <button class="region-btn active" id="savedModeHench" data-saved-mode="hench">헨치별 보기</button>
+        <button class="region-btn" id="savedModeArea" data-saved-mode="area">사냥터별 보기</button>
+        <button class="danger-btn" id="savedClearBtn">저장목록 비우기</button>
+      </div>
+      <div class="saved-summary" id="savedSummary"></div>
+    </section>
+    <section class="panel">
+      <div id="savedContent"></div>
     </section>
   </main>
 
@@ -455,11 +506,179 @@ $("#statCore").textContent=D.meta.coreCount.toLocaleString();
 $("#statRecipe").textContent=D.meta.recipeCount.toLocaleString();
 $("#statDrop").textContent=D.meta.dropCoreCount.toLocaleString();
 
+
+// ===== 내 헨치 저장: 브라우저별 localStorage =====
+const SAVED_HENCH_KEY="mm_saved_hench_v1";
+let savedMode="hench";
+let savedDirty=true;
+
+function loadSavedHench(){
+  try{
+    const raw=localStorage.getItem(SAVED_HENCH_KEY);
+    const arr=raw?JSON.parse(raw):[];
+    return new Set(Array.isArray(arr)?arr.filter(n=>typeof n==="string"&&coreMap.has(n)):[]);
+  }catch(_){
+    return new Set();
+  }
+}
+const savedHench=loadSavedHench();
+
+function persistSavedHench(){
+  try{ localStorage.setItem(SAVED_HENCH_KEY,JSON.stringify([...savedHench])); }catch(_){}
+}
+function isSavedHench(name){ return savedHench.has(name); }
+function savedStar(name){
+  const on=isSavedHench(name);
+  return `<button class="save-btn ${on?"saved":""}" data-save-core="${esc(name)}" title="${on?"내 헨치에서 제거":"내 헨치에 저장"}" aria-label="${on?"내 헨치에서 제거":"내 헨치에 저장"}">${on?"★":"☆"}</button>`;
+}
+function updateSavedCount(){
+  const el=$("#savedTabCount");
+  if(el) el.textContent=String(savedHench.size);
+}
+function updateSavedButtons(name){
+  document.querySelectorAll("[data-save-core]").forEach(btn=>{
+    if(btn.dataset.saveCore!==name) return;
+    const on=isSavedHench(name);
+    btn.classList.toggle("saved",on);
+    btn.textContent=on?"★":"☆";
+    btn.title=on?"내 헨치에서 제거":"내 헨치에 저장";
+    btn.setAttribute("aria-label",btn.title);
+  });
+}
+function toggleSavedHench(name){
+  if(!coreMap.has(name)) return;
+  if(savedHench.has(name)) savedHench.delete(name);
+  else savedHench.add(name);
+  persistSavedHench();
+  savedDirty=true;
+  updateSavedCount();
+  updateSavedButtons(name);
+  if(currentView==="saved") renderSavedHench(true);
+}
+function uniqStrings(arr){ return [...new Set(arr.filter(Boolean))]; }
+function habitatLabels(name){
+  return uniqStrings((habitatsByCore.get(name)||[]).map(h=>`${h.group}${h.area?` · ${h.area}`:""}`));
+}
+function dropLabels(name){
+  return uniqStrings((dropsByCore.get(name)||[]).map(d=>`${d.region}${d.sub?` · ${d.sub}`:""}`));
+}
+function savedCardHtml(name){
+  const c=coreMap.get(name)||{};
+  const hs=habitatLabels(name), ds=dropLabels(name), rs=recipesByTarget.get(name)||[];
+  const tier=tierOf(name), group=coreGroupOf(name);
+  return `<div class="saved-card">
+    <div class="saved-head">
+      ${henchImg(name,"hench-img saved-thumb")}
+      <div class="saved-head-text">
+        <button class="saved-name" data-core="${esc(name)}">${esc(name)}</button>
+        <div class="saved-meta">
+          <span class="badge"><span class="sp ${speciesClass(c.species)}">${esc(c.species||"미확인")}</span></span>
+          <span class="badge">기렙 ${esc(fmt(c.base))}</span>
+          ${tier?`<span class="badge tier">${esc(tierLabel(tier))}</span>`:""}
+          ${c.range==="장코"?`<span class="badge range-long">장코</span>`:`<span class="badge range-short">단코</span>`}
+          ${c.dropAvailable?`<span class="badge drop">득코 O</span>`:`<span class="badge">득코 X</span>`}
+          ${group?`<span class="badge core-group">${esc(group)}</span>`:""}
+        </div>
+      </div>
+      ${savedStar(name)}
+    </div>
+    <div class="saved-section"><b>출현 사냥터</b>
+      <div class="saved-locs">${hs.length?hs.map(x=>`<span class="saved-loc">${esc(x)}</span>`).join(""):`<span class="muted">현재 확인된 출현 위치 없음</span>`}</div>
+    </div>
+    <div class="saved-section"><b>득코 위치</b>
+      <div class="saved-locs">${ds.length?ds.map(x=>`<span class="saved-loc">${esc(x)}</span>`).join(""):(c.dropAvailable?`<span class="muted">득코 가능 · 위치 기록 없음</span>`:`<span class="muted">득코 불가</span>`)}</div>
+    </div>
+    <div class="saved-section"><b>조합식</b>
+      ${rs.length?`<span class="muted">${rs.length}개 등록 · 이름을 누르면 상세에서 확인</span>`:`<span class="muted">등록된 조합식 없음</span>`}
+    </div>
+  </div>`;
+}
+function savedAreaHtml(names){
+  const byArea=new Map();
+  const noArea=[];
+  for(const name of names){
+    const hs=habitatLabels(name);
+    if(!hs.length){ noArea.push(name); continue; }
+    for(const area of hs){
+      if(!byArea.has(area)) byArea.set(area,[]);
+      byArea.get(area).push(name);
+    }
+  }
+  const blocks=[...byArea.entries()].sort((a,b)=>a[0].localeCompare(b[0],"ko")).map(([area,list])=>{
+    const unique=uniqStrings(list).sort((a,b)=>a.localeCompare(b,"ko"));
+    return `<div class="saved-area"><h4>${esc(area)} <span class="muted">· ${unique.length}종</span></h4>
+      <div class="core-chips">${unique.map(name=>{const c=coreMap.get(name);return `<button class="chip" data-core="${esc(name)}">${henchImg(name,"hench-img chip-thumb")}<span class="sp ${speciesClass(c?.species)}">${esc(name)}</span></button>`}).join("")}</div>
+    </div>`;
+  });
+  if(noArea.length){
+    blocks.push(`<div class="saved-area"><h4>출현 위치 미확인 <span class="muted">· ${noArea.length}종</span></h4>
+      <div class="core-chips">${noArea.sort((a,b)=>a.localeCompare(b,"ko")).map(name=>`<button class="chip" data-core="${esc(name)}">${henchImg(name,"hench-img chip-thumb")}<span>${esc(name)}</span></button>`).join("")}</div>
+    </div>`);
+  }
+  return `<div class="saved-area-grid">${blocks.join("")}</div>`;
+}
+function renderSavedHench(force=false){
+  if(!force && !savedDirty) return;
+  savedDirty=false;
+  updateSavedCount();
+  const names=[...savedHench].filter(n=>coreMap.has(n)).sort((a,b)=>a.localeCompare(b,"ko"));
+  $("#savedSummary").textContent=names.length
+    ? `저장한 헨치 ${names.length}종 · 목록은 현재 브라우저에만 저장됩니다.`
+    : "아직 저장한 헨치가 없습니다. 헨치 목록의 ☆ 버튼을 눌러 추가하세요.";
+  $("#savedModeHench").classList.toggle("active",savedMode==="hench");
+  $("#savedModeArea").classList.toggle("active",savedMode==="area");
+  if(!names.length){
+    $("#savedContent").innerHTML='<div class="saved-empty">헨치 찾기에서 ☆ 버튼을 눌러 만들고 싶은 헨치를 저장해 보세요.</div>';
+    return;
+  }
+  $("#savedContent").innerHTML=savedMode==="area"
+    ? savedAreaHtml(names)
+    : `<div class="saved-grid">${names.map(savedCardHtml).join("")}</div>`;
+}
+function initSavedHench(){
+  updateSavedCount();
+  document.addEventListener("click",e=>{
+    const save=e.target.closest("[data-save-core]");
+    if(save){
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSavedHench(save.dataset.saveCore);
+      return;
+    }
+    const mode=e.target.closest("[data-saved-mode]");
+    if(mode){
+      savedMode=mode.dataset.savedMode==="area"?"area":"hench";
+      savedDirty=true;
+      renderSavedHench(true);
+    }
+  });
+  $("#savedClearBtn")?.addEventListener("click",()=>{
+    if(!savedHench.size) return;
+    if(!confirm(`저장한 헨치 ${savedHench.size}종을 모두 지울까요?`)) return;
+    const old=[...savedHench];
+    savedHench.clear();
+    persistSavedHench();
+    savedDirty=true;
+    updateSavedCount();
+    old.forEach(updateSavedButtons);
+    renderSavedHench(true);
+  });
+  window.addEventListener("storage",e=>{
+    if(e.key!==SAVED_HENCH_KEY) return;
+    const fresh=loadSavedHench();
+    savedHench.clear(); fresh.forEach(n=>savedHench.add(n));
+    savedDirty=true; updateSavedCount();
+    document.querySelectorAll("[data-save-core]").forEach(btn=>updateSavedButtons(btn.dataset.saveCore));
+    if(currentView==="saved") renderSavedHench(true);
+  });
+}
+
 let currentView="cores";
 let viewWorkTimer=0;
 function runViewWork(id){
   if(id==="zones" && !zonesRendered) renderZones();
   if(id==="mix" && !mixRendered) refreshMixResults();
+  if(id==="saved") renderSavedHench();
 }
 function switchView(id){
   if(id===currentView) return;
@@ -503,7 +722,7 @@ const CORE_VIEW=D.cores.map(c=>{
   const firstDrop=hs[0] ? `${hs[0].group}${hs[0].area?` · ${hs[0].area}`:""}` : (ds[0] ? `${ds[0].region}${ds[0].sub?` · ${ds[0].sub}`:""}` : "-");
   const regionSet=new Set([...hs.map(h=>h.group),...ds.map(d=>d.region)].filter(Boolean));
   const rowHtml=`<tr>
-      <td><div class="core-name-wrap">${henchImg(c.name,"hench-img core-thumb")}<button class="core-link" data-core="${esc(c.name)}">${esc(c.name)}</button></div></td>
+      <td><div class="core-name-wrap">${henchImg(c.name,"hench-img core-thumb")}<button class="core-link" data-core="${esc(c.name)}">${esc(c.name)}</button>${savedStar(c.name)}</div></td>
       <td>${tierOf(c.name)?`<span class="badge tier">${esc(tierLabel(tierOf(c.name)))}</span>`:"<span class='muted'>-</span>"}</td>
       <td><span class="sp ${speciesClass(c.species)}">${esc(c.species||"미확인")}</span></td>
       <td>${c.range==="장코"?`<span class="badge range-long" title="장거리 코어 · 내부 공격거리 값 ${c.rangeValue}">장코</span>`:`<span class="badge range-short" title="단거리 코어 · 내부 공격거리 값 ${c.rangeValue}">단코</span>`}</td>
@@ -608,7 +827,7 @@ function openCore(name){
     <div class="eyebrow">HENCH DETAIL</div>
     <div class="detail-hero">
       ${henchImg(name,"hench-img detail-img",false) || `<div class="img-placeholder detail-img">이미지 없음</div>`}
-      <div class="detail-title-wrap"><h2 class="detail-title">${esc(name)}</h2></div>
+      <div class="detail-title-wrap"><h2 class="detail-title">${esc(name)}</h2><div style="margin-top:8px">${savedStar(name)}</div></div>
     </div>
     <div class="detail-badges">
       <span class="badge"><span class="sp ${speciesClass(c.species)}">${esc(c.species||"종족 미확인")}</span></span>
@@ -1113,6 +1332,7 @@ function initInquiry(){
 }
 
 bindCoreLinks();
+initSavedHench();
 renderCoreTable();
 // 숨겨진 탭은 클릭 이벤트 안에서 바로 무겁게 그리지 않습니다.
 // 브라우저가 완전히 한가할 때만 가볍게 미리 준비하여 실제 탭 클릭 INP를 낮춥니다.
