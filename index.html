@@ -191,7 +191,7 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 @media(max-width:560px){.tree-img{width:60px;height:60px}.material-img{width:50px;height:50px}.detail-img{width:82px;height:82px;flex-basis:82px}.core-thumb{width:36px;height:36px;flex-basis:36px}}
 
 
-/* ===== 내 헨치 저장 (localStorage) ===== */
+/* ===== 헨치 즐겨찾기 저장 (localStorage) ===== */
 .save-btn{
   border:1px solid rgba(245,201,106,.38);background:rgba(245,201,106,.06);color:#9aa6b2;
   width:30px;height:30px;border-radius:9px;display:inline-grid;place-items:center;
@@ -221,6 +221,21 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .saved-empty{padding:38px 16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
 @media(max-width:900px){.saved-grid,.saved-area-grid{grid-template-columns:1fr}}
 
+
+.favorite-warning{
+  margin:10px 0 12px;padding:11px 13px;border:1px solid rgba(245,201,106,.30);
+  background:rgba(245,201,106,.07);border-radius:12px;color:#e7d7a4;
+  font-size:12px;line-height:1.65
+}
+.favorite-warning b{color:#f5d98f}
+.changelog-list{display:grid;gap:12px}
+.changelog-entry{border:1px solid var(--line);background:#0e1726;border-radius:14px;padding:15px}
+.changelog-entry h4{margin:0 0 5px;font-size:15px}
+.changelog-date{color:var(--accent);font-weight:850;font-size:12px}
+.changelog-entry ul{margin:10px 0 0;padding-left:20px;color:#cbd8e7;line-height:1.7;font-size:13px}
+.changelog-note{margin-top:10px;padding:10px 12px;border:1px solid rgba(245,201,106,.25);
+  background:rgba(245,201,106,.06);border-radius:10px;color:#e6d5a0;font-size:12px;line-height:1.6}
+
 </style>
 </head>
 <body>
@@ -231,7 +246,8 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
       <button class="tab active" data-view="cores">헨치 찾기</button>
       <button class="tab" data-view="zones">사냥터 보기</button>
       <button class="tab" data-view="mix">믹스트리</button>
-      <button class="tab" data-view="saved">내 헨치 <span class="saved-tab-count" id="savedTabCount">0</span></button>
+      <button class="tab" data-view="saved">헨치 즐겨찾기 <span class="saved-tab-count" id="savedTabCount">0</span></button>
+      <button class="tab" data-view="updates">업데이트 내역</button>
       <button class="tab" data-view="contact">문의하기</button>
       <a class="top-link" href="https://www.mixmaster.co.kr/Event/list.do?type=ing" target="_blank" rel="noopener noreferrer">믹마 이벤트 ↗</a>
       <a class="top-link" href="https://cafe.naver.com/wcnet" target="_blank" rel="noopener noreferrer">믹마 카페 ↗</a>
@@ -288,13 +304,20 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
   <main id="view-saved" class="view">
     <section class="panel">
       <div class="panel-title">
-        <h3>내 헨치</h3>
+        <h3>헨치 즐겨찾기</h3>
         <small>이 브라우저에만 저장 · 로그인 필요 없음</small>
+      </div>
+
+      <div class="favorite-warning">
+        <b>주의</b> · 즐겨찾기는 현재 브라우저의 localStorage에만 저장됩니다.
+        브라우저의 <b>사이트 데이터/저장공간을 삭제</b>하거나, 일부 브라우저의 <b>캐시·데이터 삭제</b> 메뉴에서
+        사이트 저장정보까지 함께 지우면 즐겨찾기도 삭제될 수 있습니다.
+        다른 PC·휴대폰·브라우저와는 자동 동기화되지 않습니다.
       </div>
       <div class="saved-toolbar">
         <button class="region-btn active" id="savedModeHench" data-saved-mode="hench">헨치별 보기</button>
         <button class="region-btn" id="savedModeArea" data-saved-mode="area">사냥터별 보기</button>
-        <button class="danger-btn" id="savedClearBtn">저장목록 비우기</button>
+        <button class="danger-btn" id="savedClearBtn">즐겨찾기 비우기</button>
       </div>
       <div class="saved-summary" id="savedSummary"></div>
     </section>
@@ -339,6 +362,35 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
     </section>
   </main>
 
+
+
+  <main id="view-updates" class="view">
+    <section class="panel">
+      <div class="panel-title">
+        <h3>업데이트 내역</h3>
+        <small>중요 기능/데이터 변경만 기록합니다</small>
+      </div>
+      <div class="changelog-list">
+        <div class="changelog-entry">
+          <div class="changelog-date">2026-09-18</div>
+          <h4>헨치 즐겨찾기 기능 추가</h4>
+          <ul>
+            <li>헨치 목록과 상세창에서 ☆/★ 버튼으로 즐겨찾기 추가·해제</li>
+            <li>저장한 헨치를 한 번에 보는 <b>헨치별 보기</b> 추가</li>
+            <li>저장한 헨치를 같은 출현 위치끼리 묶어 보는 <b>사냥터별 보기</b> 추가</li>
+            <li>즐겨찾기 개수를 상단 탭에 표시</li>
+            <li>로그인 없이 브라우저별 localStorage에 개인 저장</li>
+          </ul>
+          <div class="changelog-note">
+            <b>주의:</b> 즐겨찾기는 현재 브라우저의 사이트 저장공간에만 보관됩니다.
+            브라우저에서 사이트 데이터/저장공간을 삭제하거나, 일부 캐시·데이터 삭제 메뉴에서
+            사이트 저장정보까지 함께 삭제하면 즐겨찾기가 사라질 수 있습니다.
+            다른 기기나 다른 브라우저로 자동 동기화되지 않습니다.
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
 
   <main id="view-contact" class="view">
     <section class="panel">
@@ -507,7 +559,7 @@ $("#statRecipe").textContent=D.meta.recipeCount.toLocaleString();
 $("#statDrop").textContent=D.meta.dropCoreCount.toLocaleString();
 
 
-// ===== 내 헨치 저장: 브라우저별 localStorage =====
+// ===== 헨치 즐겨찾기 저장: 브라우저별 localStorage =====
 const SAVED_HENCH_KEY="mm_saved_hench_v1";
 let savedMode="hench";
 let savedDirty=true;
@@ -529,7 +581,7 @@ function persistSavedHench(){
 function isSavedHench(name){ return savedHench.has(name); }
 function savedStar(name){
   const on=isSavedHench(name);
-  return `<button class="save-btn ${on?"saved":""}" data-save-core="${esc(name)}" title="${on?"내 헨치에서 제거":"내 헨치에 저장"}" aria-label="${on?"내 헨치에서 제거":"내 헨치에 저장"}">${on?"★":"☆"}</button>`;
+  return `<button class="save-btn ${on?"saved":""}" data-save-core="${esc(name)}" title="${on?"즐겨찾기에서 제거":"즐겨찾기에 추가"}" aria-label="${on?"즐겨찾기에서 제거":"즐겨찾기에 추가"}">${on?"★":"☆"}</button>`;
 }
 function updateSavedCount(){
   const el=$("#savedTabCount");
@@ -541,7 +593,7 @@ function updateSavedButtons(name){
     const on=isSavedHench(name);
     btn.classList.toggle("saved",on);
     btn.textContent=on?"★":"☆";
-    btn.title=on?"내 헨치에서 제거":"내 헨치에 저장";
+    btn.title=on?"즐겨찾기에서 제거":"즐겨찾기에 추가";
     btn.setAttribute("aria-label",btn.title);
   });
 }
@@ -623,12 +675,12 @@ function renderSavedHench(force=false){
   updateSavedCount();
   const names=[...savedHench].filter(n=>coreMap.has(n)).sort((a,b)=>a.localeCompare(b,"ko"));
   $("#savedSummary").textContent=names.length
-    ? `저장한 헨치 ${names.length}종 · 목록은 현재 브라우저에만 저장됩니다.`
-    : "아직 저장한 헨치가 없습니다. 헨치 목록의 ☆ 버튼을 눌러 추가하세요.";
+    ? `즐겨찾기한 헨치 ${names.length}종 · 목록은 현재 브라우저에만 저장됩니다.`
+    : "아직 즐겨찾기한 헨치가 없습니다. 헨치 목록의 ☆ 버튼을 눌러 추가하세요.";
   $("#savedModeHench").classList.toggle("active",savedMode==="hench");
   $("#savedModeArea").classList.toggle("active",savedMode==="area");
   if(!names.length){
-    $("#savedContent").innerHTML='<div class="saved-empty">헨치 찾기에서 ☆ 버튼을 눌러 만들고 싶은 헨치를 저장해 보세요.</div>';
+    $("#savedContent").innerHTML='<div class="saved-empty">헨치 찾기에서 ☆ 버튼을 눌러 만들고 싶은 헨치를 즐겨찾기에 추가해 보세요.</div>';
     return;
   }
   $("#savedContent").innerHTML=savedMode==="area"
@@ -654,7 +706,7 @@ function initSavedHench(){
   });
   $("#savedClearBtn")?.addEventListener("click",()=>{
     if(!savedHench.size) return;
-    if(!confirm(`저장한 헨치 ${savedHench.size}종을 모두 지울까요?`)) return;
+    if(!confirm(`즐겨찾기한 헨치 ${savedHench.size}종을 모두 지울까요?`)) return;
     const old=[...savedHench];
     savedHench.clear();
     persistSavedHench();
