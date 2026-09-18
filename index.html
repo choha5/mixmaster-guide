@@ -452,6 +452,7 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
               <textarea class="textarea" id="adminReply" maxlength="4000" placeholder="답변 내용"></textarea>
               <div class="action-row">
                 <button class="primary-btn" id="adminReplyBtn">답변 등록</button>
+                <button class="danger-btn" id="adminDeleteBtn">문의 삭제</button>
                 <button class="danger-btn" id="adminBlockBtn" style="display:none">작성자 문의 차단</button>
                 <button class="secondary-btn" id="adminUnblockBtn" style="display:none">차단 해제</button>
               </div>
@@ -1280,6 +1281,7 @@ async function adminLogin(){
   }catch(e){sessionStorage.removeItem("mm_admin_password");$("#adminArea").style.display="none";alert(e.message);}
 }
 function adminLogout(){
+  ++adminThreadRequest;
   sessionStorage.removeItem("mm_admin_password");currentAdminTicket=null;currentAdminCanBlock=false;currentAdminBlocked=false;adminListMode="all";$("#adminArea").style.display="none";$("#adminLogoutBtn").style.display="none";$("#adminThread").innerHTML="";$("#adminThreadTitle").textContent="문의 선택";$("#adminReplyBox").style.display="none";
 }
 function updateAdminListTabs(){
@@ -1314,7 +1316,7 @@ async function loadBlockedList(){
     <small>원인 문의 ${esc(b.source_ticket||"-")}${b.title?` · ${esc(b.title)}`:""}</small>
     <small>사유: ${esc(b.reason||"관리자 문의 차단")}</small>
     <div class="action-row">
-      ${b.source_ticket?`<button class="secondary-btn" data-blocked-thread="${esc(b.source_ticket)}">원인 문의 보기</button>`:""}
+      ${b.source_ticket&&b.title?`<button class="secondary-btn" data-blocked-thread="${esc(b.source_ticket)}">원인 문의 보기</button>`:""}
       <button class="danger-btn" data-blocked-unblock="${esc(b.client_hash)}">차단 해제</button>
     </div>
   </div>`).join("")||'<div class="empty">차단된 사용자가 없습니다.</div>';
@@ -1331,9 +1333,14 @@ async function adminUnblockHash(clientHash){
     await loadBlockedList();
   }catch(e){alert(e.message);}
 }
+let adminDeletePending=false, adminThreadRequest=0;
 async function loadAdminThread(ticket){
+  if(adminDeletePending) return;
+  const request=++adminThreadRequest;
   try{
-    const data=await inqApi("/admin/thread",{ticket_code:ticket},true); currentAdminTicket=ticket;
+    const data=await inqApi("/admin/thread",{ticket_code:ticket},true);
+    if(request!==adminThreadRequest || adminDeletePending) return;
+    currentAdminTicket=ticket;
     const mod=data.moderation||{};currentAdminCanBlock=!!mod.can_block;currentAdminBlocked=!!mod.blocked;
     $("#adminThreadTitle").textContent=`${data.inquiry.ticket_code} · ${data.inquiry.title}`;
     renderInquiryThread("#adminThread",data,false);$("#adminReplyBox").style.display="block";
@@ -1365,6 +1372,28 @@ async function adminUnblock(){
     await loadAdminThread(currentAdminTicket);await refreshAdminSidebar();
   }catch(e){alert(e.message);}
 }
+async function adminDelete(){
+  if(!currentAdminTicket || adminDeletePending) return;
+  const ticket=currentAdminTicket;
+  if(!confirm("선택한 문의를 완전히 삭제할까요?\n\n"+$("#adminThreadTitle").textContent+"\n\n문의 내용과 모든 답변이 삭제되며 복구할 수 없습니다. 작성자 차단은 유지됩니다.")) return;
+  adminDeletePending=true;++adminThreadRequest;
+  const buttons=$$("#adminReplyBox button");
+  const states=buttons.map(b=>b.disabled);
+  buttons.forEach(b=>b.disabled=true);
+  const btn=$("#adminDeleteBtn");btn.textContent="삭제 중...";
+  try{
+    await inqApi("/admin/delete",{ticket_code:ticket},true);
+    currentAdminTicket=null;currentAdminCanBlock=false;currentAdminBlocked=false;
+    $("#adminReply").value="";$("#adminReplyBox").style.display="none";
+    $("#adminThreadTitle").textContent="문의 선택";
+    $("#adminThread").textContent="문의와 연결된 메시지가 삭제되었습니다.";
+    $("#adminModerationNote").textContent="";
+    $$('[data-admin-ticket]').filter(b=>b.dataset.adminTicket===ticket).forEach(b=>b.remove());
+    try{await refreshAdminSidebar();}
+    catch(e){alert("삭제는 완료되었지만 목록을 새로고침하지 못했습니다. 전체 문의 또는 차단 목록을 다시 눌러 주세요.\n"+e.message);}
+  }catch(e){alert(e.message);}
+  finally{adminDeletePending=false;buttons.forEach((b,i)=>b.disabled=states[i]);btn.textContent="문의 삭제";}
+}
 async function adminReply(){
   if(!currentAdminTicket) return; const body=$("#adminReply").value.trim(); if(!body) return;
   const btn=$("#adminReplyBtn");btn.disabled=true;btn.textContent="등록 중...";
@@ -1377,7 +1406,7 @@ function initInquiry(){
   setInquiryBackendNote();
   const last=localStorage.getItem("mm_last_ticket");if(last && !$("#inqTicket").value) $("#inqTicket").value=last;
   $("#inqCreateBtn").onclick=createInquiry;$("#inqLookupBtn").onclick=lookupInquiry;$("#inqFollowupBtn").onclick=sendFollowup;
-  $("#adminLoginBtn").onclick=adminLogin;$("#adminLogoutBtn").onclick=adminLogout;$("#adminReplyBtn").onclick=adminReply;$("#adminBlockBtn").onclick=adminBlock;$("#adminUnblockBtn").onclick=adminUnblock;
+  $("#adminLoginBtn").onclick=adminLogin;$("#adminLogoutBtn").onclick=adminLogout;$("#adminDeleteBtn").onclick=adminDelete;$("#adminReplyBtn").onclick=adminReply;$("#adminBlockBtn").onclick=adminBlock;$("#adminUnblockBtn").onclick=adminUnblock;
   $("#adminAllTab").onclick=showAdminAll;$("#adminBlockedTab").onclick=showAdminBlocked;
   $("#inqLookupPassword").addEventListener("keydown",e=>{if(e.key==="Enter")lookupInquiry()});
   if(sessionStorage.getItem("mm_admin_password")){adminLogin().catch(()=>{});}
