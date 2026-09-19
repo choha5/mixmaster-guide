@@ -83,6 +83,14 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .material button{border:0;background:none;color:#fff;font-weight:700;padding:0}
 .material small{display:block;color:var(--muted);margin-top:4px;line-height:1.45}
 .tree-tools{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.tree-target-search{position:relative;width:280px;max-width:100%;flex:0 1 280px}
+.tree-target-search .input{max-width:none}
+.tree-target-suggestions{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:25;max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#0d1727;box-shadow:0 16px 36px rgba(0,0,0,.34);padding:5px}
+.tree-target-suggestions.open{display:block}
+.tree-target-suggestion{display:flex;width:100%;align-items:center;gap:9px;border:0;border-radius:9px;background:transparent;color:#eaf2fa;padding:8px 9px;text-align:left}
+.tree-target-suggestion:hover,.tree-target-suggestion:focus{background:rgba(90,215,196,.09);color:var(--accent);outline:none}
+.tree-target-suggestion .search-thumb{width:34px;height:34px;flex:0 0 34px}
+.tree-target-suggestion small{display:block;margin-top:2px;color:var(--muted);font-size:10px}
 .tree-level-wrap{display:flex;align-items:center;gap:7px;border:1px solid var(--line);background:#0b1424;border-radius:11px;padding:0 10px;height:43px}
 .tree-level-wrap label{font-size:11px;color:var(--muted);white-space:nowrap}
 .tree-level-input{width:92px;border:0;background:transparent;color:var(--text);outline:none;font-weight:800}
@@ -351,7 +359,10 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
     <section class="panel">
       <div class="panel-title"><h3>목표 레벨 믹스트리</h3><small>원하는 완성 Lv를 기준으로 필요한 재료 Lv까지 아래로 계산합니다</small></div>
       <div class="tree-tools">
-        <input class="input" id="treeTarget" placeholder="조합식이 있는 헨치" style="max-width:280px">
+        <div class="tree-target-search">
+          <input class="input" id="treeTarget" placeholder="조합식이 있는 헨치" autocomplete="off">
+          <div class="tree-target-suggestions" id="treeTargetSuggestions"></div>
+        </div>
         <div class="tree-level-wrap"><label for="treeTargetLv">목표 Lv</label><input class="tree-level-input" id="treeTargetLv" type="number" min="1" step="1" placeholder="예: 225"></div>
         <select class="select" id="rootRecipe" style="max-width:390px"></select>
         <select class="select" id="treeDepth" title="표시 단계" style="max-width:120px"><option>3단계</option><option>4단계</option><option selected>5단계</option><option>6단계</option><option>7단계</option><option>8단계</option></select>
@@ -1137,7 +1148,51 @@ function treeNode(name,desiredLv,depth,seen,recipeIndex=0,isRoot=false){
 }
 $("#treeDepth").onchange=renderTree;$("#rootRecipe").onchange=renderTree;$("#treeTargetLv").onchange=renderTree;
 $("#treeTargetLv").addEventListener("keydown",e=>{if(e.key==="Enter")renderTree()});
-$("#treeTarget").addEventListener("keydown",e=>{if(e.key==="Enter")$("#treeGo").click()});
+
+// 목표 레벨 믹스트리 헨치 이름 자동완성
+const treeTargetSuggestions=$("#treeTargetSuggestions");
+function hideTreeTargetSuggestions(){
+  treeTargetSuggestions.classList.remove("open");
+  treeTargetSuggestions.innerHTML="";
+}
+function renderTreeTargetSuggestions(){
+  const q=norm($("#treeTarget").value);
+  if(!q){hideTreeTargetSuggestions();return;}
+  const names=[];
+  for(const n of MIX_NAMES){
+    if(MIX_NAME_NORM.get(n).includes(q)) names.push(n);
+    if(names.length>=40) break;
+  }
+  if(!names.length){hideTreeTargetSuggestions();return;}
+  treeTargetSuggestions.innerHTML=names.map(n=>{
+    const base=coreMap.get(n)?.base;
+    return `<button type="button" class="tree-target-suggestion" data-tree-target="${esc(n)}">${henchImg(n,"hench-img search-thumb")}<span>${esc(n)}<small>기렙 ${esc(fmt(base))} · ${(recipesByTarget.get(n)||[]).length}식</small></span></button>`;
+  }).join("");
+  treeTargetSuggestions.classList.add("open");
+}
+function chooseTreeTarget(name){
+  if(!recipesByTarget.has(name)) return;
+  $("#treeTarget").value=name;
+  const targetCore=coreMap.get(name);
+  if(targetCore?.base!=null) $("#treeTargetLv").value=targetCore.base;
+  window.activeMix=name;
+  hideTreeTargetSuggestions();
+  renderTree();
+}
+$("#treeTarget").addEventListener("input",renderTreeTargetSuggestions,{passive:true});
+$("#treeTarget").addEventListener("focus",renderTreeTargetSuggestions);
+$("#treeTarget").addEventListener("keydown",e=>{
+  if(e.key==="Escape"){hideTreeTargetSuggestions();return;}
+  if(e.key==="Enter"){hideTreeTargetSuggestions();$("#treeGo").click();}
+});
+treeTargetSuggestions.addEventListener("mousedown",e=>e.preventDefault());
+treeTargetSuggestions.addEventListener("click",e=>{
+  const b=e.target.closest("[data-tree-target]");
+  if(b) chooseTreeTarget(b.dataset.treeTarget);
+});
+document.addEventListener("click",e=>{
+  if(!e.target.closest(".tree-target-search")) hideTreeTargetSuggestions();
+});
 $("#treeGo").onclick=()=>{
   const n=$("#treeTarget").value.trim();
   if(!recipesByTarget.has(n)){alert("조합식이 등록된 헨치 이름을 확인해 주세요.");return;}
