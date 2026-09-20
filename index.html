@@ -759,7 +759,13 @@ function switchView(id){
   // 탭 클릭의 다음 페인트를 먼저 허용한 뒤 무거운 첫 렌더를 분리합니다.
   if(window.scrollY) requestAnimationFrame(()=>window.scrollTo(0,0));
   if(viewWorkTimer) clearTimeout(viewWorkTimer);
-  viewWorkTimer=setTimeout(()=>{viewWorkTimer=0;runViewWork(id);},0);
+  // 탭의 active 상태를 먼저 한 프레임 그린 뒤 무거운 내용을 렌더링한다.
+  requestAnimationFrame(()=>{
+    viewWorkTimer=setTimeout(()=>{
+      viewWorkTimer=0;
+      if(currentView===id) runViewWork(id);
+    },0);
+  });
 }
 document.querySelector(".tabs").addEventListener("click",e=>{
   const b=e.target.closest(".tab[data-view]");
@@ -811,22 +817,39 @@ const CORE_SORTED={
   })
 };
 const CORE_BY_NAME=new Map(CORE_VIEW.map(v=>[v.c.name,v]));
-let coreRowsMaterialized=false;
 let lastCoreRenderKey="";
-function captureCoreRows(){
-  if(coreRowsMaterialized) return;
-  for(const tr of $("#coreBody").children){
-    const name=tr.querySelector?.("[data-core]")?.dataset?.core;
-    const v=name?CORE_BY_NAME.get(name):null;
-    if(v) v.rowEl=tr;
-  }
-  coreRowsMaterialized=CORE_VIEW.every(v=>v.rowEl);
+let coreRenderToken=0;
+let coreRenderTimer=0;
+const CORE_RENDER_CHUNK=48;
+
+function ensureCoreRow(v){
+  if(v.rowEl) return v.rowEl;
+  const tpl=document.createElement("template");
+  tpl.innerHTML=v.rowHtml.trim();
+  v.rowEl=tpl.content.firstElementChild;
+  return v.rowEl;
 }
+
+function appendCoreRowsProgressively(rows,start,token){
+  if(token!==coreRenderToken || start>=rows.length) return;
+  const body=$("#coreBody");
+  const end=Math.min(start+CORE_RENDER_CHUNK,rows.length);
+  const frag=document.createDocumentFragment();
+  for(let i=start;i<end;i++) frag.appendChild(ensureCoreRow(rows[i]));
+  body.appendChild(frag);
+
+  if(end<rows.length){
+    // 한 번에 수백 행을 DOM에 꽂지 않고 프레임 사이에 나눠서 추가한다.
+    requestAnimationFrame(()=>setTimeout(()=>appendCoreRowsProgressively(rows,end,token),0));
+  }
+}
+
 function renderCoreTable(){
   const q=norm($("#coreSearch").value), sp=$("#speciesFilter").value, region=$("#regionFilter").value, coreGroup=$("#coreGroupFilter").value, tier=$("#tierFilter").value, range=$("#rangeFilter").value, kind=$("#kindFilter").value, sort=$("#sortFilter")?.value||"name";
   const key=[q,sp,region,coreGroup,tier,range,kind,sort].join("\u0001");
   if(key===lastCoreRenderKey) return;
   lastCoreRenderKey=key;
+  const token=++coreRenderToken;
   const source=CORE_SORTED[sort]||CORE_SORTED.name;
   const rows=[];
   for(const v of source){
@@ -842,25 +865,29 @@ function renderCoreTable(){
     if(kind==="used" && !st.used) continue;
     rows.push(v);
   }
+
   $("#coreCountLine").textContent=`검색 결과 ${rows.length.toLocaleString()}개`;
   const body=$("#coreBody");
 
-  if(!coreRowsMaterialized){
-    // 최초 1회만 HTML을 만들고 이후 검색/필터에서는 같은 <tr> 노드를 재사용합니다.
-    body.innerHTML=rows.length?rows.map(v=>v.rowHtml).join(""):`<tr><td colspan="9" class="empty">조건에 맞는 헨치가 없습니다.</td></tr>`;
-    captureCoreRows();
-  }else if(rows.length){
-    const frag=document.createDocumentFragment();
-    for(const v of rows) if(v.rowEl) frag.appendChild(v.rowEl);
-    body.replaceChildren(frag);
-  }else{
+  if(!rows.length){
     const tr=document.createElement("tr");
     tr.innerHTML='<td colspan="9" class="empty">조건에 맞는 헨치가 없습니다.</td>';
     body.replaceChildren(tr);
+    return;
   }
+
+  // 첫 화면에 필요한 소량만 즉시 교체하고 나머지는 프레임마다 분할 렌더링.
+  const firstEnd=Math.min(CORE_RENDER_CHUNK,rows.length);
+  const firstFrag=document.createDocumentFragment();
+  for(let i=0;i<firstEnd;i++) firstFrag.appendChild(ensureCoreRow(rows[i]));
+  body.replaceChildren(firstFrag);
   bindCoreLinks();
+
+  if(firstEnd<rows.length){
+    requestAnimationFrame(()=>setTimeout(()=>appendCoreRowsProgressively(rows,firstEnd,token),0));
+  }
 }
-let coreRenderTimer=0;
+
 function scheduleCoreRender(delay=0){
   if(coreRenderTimer) clearTimeout(coreRenderTimer);
   coreRenderTimer=setTimeout(()=>{
@@ -868,9 +895,15 @@ function scheduleCoreRender(delay=0){
     renderCoreTable();
   },delay);
 }
-// 타이핑 이벤트 자체는 즉시 페인트시키고, 실제 853행 필터 작업은 아주 짧게 디바운스합니다.
-$("#coreSearch").addEventListener("input",()=>scheduleCoreRender(70),{passive:true});
-["speciesFilter","regionFilter","coreGroupFilter","tierFilter","rangeFilter","kindFilter","sortFilter"].forEach(id=>$("#"+id).addEventListener("change",()=>scheduleCoreRender(0)));
+
+// 입력 자체가 먼저 화면에 그려진 뒤 검색 결과를 갱신한다.
+$("#coreSearch").addEventListener("input",()=>scheduleCoreRender(110),{passive:true});
+["speciesFilter","regionFilter","coreGroupFilter","tierFilter","rangeFilter","kindFilter","sortFilter"].forEach(id=>{
+  $("#"+id).addEventListener("change",()=>{
+    if(coreRenderTimer) clearTimeout(coreRenderTimer);
+    requestAnimationFrame(()=>setTimeout(()=>renderCoreTable(),0));
+  });
+});
 
 let coreLinkDelegationReady=false;
 function bindCoreLinks(){
@@ -883,7 +916,24 @@ function bindCoreLinks(){
     openCore(btn.dataset.core);
   });
 }
+let coreDetailRequest=0;
 function openCore(name){
+  const request=++coreDetailRequest;
+  const detail=$("#detail");
+  detail.innerHTML=`<button class="drawer-close" id="drawerClose">닫기 ✕</button>
+    <div class="eyebrow">HENCH DETAIL</div>
+    <h2 class="detail-title">${esc(name)}</h2>
+    <div class="muted" style="padding:10px 0">상세 정보를 불러오는 중...</div>`;
+  $("#drawer").classList.add("open");
+  $("#drawerClose").onclick=closeDrawer;
+
+  // 클릭 반응(드로어 열림)을 먼저 그린 뒤 상세 HTML을 만든다.
+  requestAnimationFrame(()=>setTimeout(()=>{
+    if(request!==coreDetailRequest || !$("#drawer").classList.contains("open")) return;
+    renderCoreDetail(name);
+  },0));
+}
+function renderCoreDetail(name){
   const c=coreMap.get(name)||{name,species:null,base:null,max:null};
   const rs=recipesByTarget.get(name)||[], us=usedBy.get(name)||[], ds=dropsByCore.get(name)||[], hs=habitatsByCore.get(name)||[], locs=[...(materialLocs.get(name)||[])];
   $("#detail").innerHTML=`
@@ -940,7 +990,7 @@ function recipeHtml(r){
     </div>
   </div>`;
 }
-function closeDrawer(){ $("#drawer").classList.remove("open"); }
+function closeDrawer(){ ++coreDetailRequest; $("#drawer").classList.remove("open"); }
 $("#drawerBackdrop").onclick=closeDrawer;
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer()});
 
@@ -988,10 +1038,14 @@ $("#mixResultList").addEventListener("click",e=>{
   const b=e.target.closest("[data-target]");
   if(b) selectMix(b.dataset.target);
 });
-let mixSearchRaf=0;
+let mixSearchTimer=0;
 $("#mixSearch").addEventListener("input",()=>{
-  if(mixSearchRaf) cancelAnimationFrame(mixSearchRaf);
-  mixSearchRaf=requestAnimationFrame(()=>{mixSearchRaf=0;lastMixQuery=null;refreshMixResults();});
+  if(mixSearchTimer) clearTimeout(mixSearchTimer);
+  mixSearchTimer=setTimeout(()=>{
+    mixSearchTimer=0;
+    lastMixQuery=null;
+    refreshMixResults();
+  },80);
 },{passive:true});
 function selectMix(name){
   window.activeMix=name;
@@ -1470,17 +1524,8 @@ function initInquiry(){
 bindCoreLinks();
 initSavedHench();
 renderCoreTable();
-// 숨겨진 탭은 클릭 이벤트 안에서 바로 무겁게 그리지 않습니다.
-// 브라우저가 완전히 한가할 때만 가볍게 미리 준비하여 실제 탭 클릭 INP를 낮춥니다.
-const warmHiddenViews=()=>{
-  if(!zonesRendered) renderZones();
-  if(!mixRendered) refreshMixResults();
-};
-if("requestIdleCallback" in window){
-  requestIdleCallback(warmHiddenViews,{timeout:3500});
-}else{
-  setTimeout(warmHiddenViews,1800);
-}
+// 숨겨진 탭은 실제로 열 때만 렌더링합니다.
+// 백그라운드 선렌더가 검색/클릭과 겹쳐 INP를 악화시키는 일을 피합니다.
 initInquiry();
 </script>
 <!-- Cloudflare Web Analytics -->
