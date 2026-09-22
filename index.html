@@ -261,6 +261,95 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .changelog-note{margin-top:10px;padding:10px 12px;border:1px solid rgba(245,201,106,.25);
   background:rgba(245,201,106,.06);border-radius:10px;color:#e6d5a0;font-size:12px;line-height:1.6}
 
+
+/* ===== 믹스트리: 읽을 수 있는 한눈에 보기 =====
+   전체 트리를 30~40%로 억지 축소하지 않고 카드 자체를 간결하게 만든다. */
+#treeViewport.tree-compact-mode .tree-root{padding:4px 8px 18px}
+#treeViewport.tree-compact-mode .tree-node{
+  box-sizing:border-box;
+  min-width:96px;
+  width:96px;
+  max-width:96px;
+  padding:6px 5px;
+  border-radius:9px;
+}
+#treeViewport.tree-compact-mode .tree-node.root-node{
+  min-width:118px;
+  width:118px;
+  max-width:118px;
+}
+#treeViewport.tree-compact-mode .tree-img{
+  width:34px;
+  height:34px;
+  margin:0 auto 3px;
+}
+#treeViewport.tree-compact-mode .img-placeholder{
+  width:34px;
+  height:34px;
+  margin:0 auto 3px;
+  border-radius:7px;
+  font-size:7px;
+}
+#treeViewport.tree-compact-mode .tree-node .name{
+  display:block;
+  width:100%;
+  padding:0;
+  font-size:10px;
+  line-height:1.15;
+  overflow-wrap:anywhere;
+}
+#treeViewport.tree-compact-mode .tree-node .need-lv{
+  gap:2px;
+  margin-top:4px;
+  padding:2px 4px;
+  font-size:9px;
+  line-height:1.1;
+}
+#treeViewport.tree-compact-mode .tree-node .tree-level-edit{
+  width:34px;
+  font-size:9px;
+  padding:0 1px;
+}
+#treeViewport.tree-compact-mode .tree-node .tree-reset{font-size:9px}
+#treeViewport.tree-compact-mode .tree-node>.meta,
+#treeViewport.tree-compact-mode .tree-node>.tree-warn,
+#treeViewport.tree-compact-mode .tree-node>.tree-note,
+#treeViewport.tree-compact-mode .tree-node>.tree-ok,
+#treeViewport.tree-compact-mode .tree-node>.result-preview{
+  display:none;
+}
+#treeViewport.tree-compact-mode .tree-subrecipe-select{
+  margin-top:4px;
+  padding:2px 3px;
+  border-radius:6px;
+  font-size:8px;
+  line-height:1.15;
+}
+#treeViewport.tree-compact-mode .tree-children{
+  padding-top:16px;
+}
+#treeViewport.tree-compact-mode .tree-children:before{
+  height:8px;
+}
+#treeViewport.tree-compact-mode .tree-children>.tree-branch{
+  padding:16px 3px 0;
+}
+#treeViewport.tree-compact-mode .tree-children>.tree-branch:before{
+  top:8px;
+}
+#treeViewport.tree-compact-mode .tree-children>.tree-branch:after{
+  top:8px;
+  height:8px;
+}
+/* compact에서 경고/불가 상태는 상세보기로 확인하되, 카드 테두리로 존재 여부는 보이게 한다 */
+#treeViewport.tree-compact-mode .tree-node[data-has-warning="1"]{
+  border-color:rgba(245,201,106,.62);
+  box-shadow:0 0 0 1px rgba(245,201,106,.08),0 5px 13px rgba(0,0,0,.12);
+}
+
+/* 상세보기는 기존 카드 크기 그대로 사용한다. */
+#treeViewport:not(.tree-compact-mode) .tree-node{transition:none}
+
 </style>
 </head>
 <body>
@@ -385,14 +474,15 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
         <select class="select" id="treeDepth" title="표시 단계" style="max-width:120px"><option>3단계</option><option>4단계</option><option selected>5단계</option><option>6단계</option><option>7단계</option><option>8단계</option></select>
         <button class="region-btn" id="treeGo">계산해서 펼치기</button>
         <div class="tree-view-controls" aria-label="믹스트리 보기 배율">
+          <button type="button" class="tree-view-btn" id="treeModeToggle" title="카드 상세정보 표시 전환">상세보기</button>
           <button type="button" class="tree-view-btn" id="treeZoomOut" title="축소">−</button>
-          <button type="button" class="tree-view-btn" id="treeFit" title="전체 트리를 화면 폭에 맞춤">전체맞춤</button>
+          <button type="button" class="tree-view-btn" id="treeFit" title="보기 영역에 맞춤">맞춤</button>
           <span class="tree-zoom-label" id="treeZoomLabel">100%</span>
           <button type="button" class="tree-view-btn" id="treeZoomIn" title="확대">＋</button>
         </div>
       </div>
       <div class="tree-calc-notice">※ 믹스트리의 레벨 계산값은 <b>참고용</b>입니다. 게임 서버의 실제 계산식이 공개되어 있지 않아 일부 코어·특수 조합에서는 실제 결과와 차이가 날 수 있습니다. <b>중요한 믹스 전에는 다른 자료와 게임 내 정보까지 함께 이중·삼중으로 반드시 재확인해 주세요.</b></div>
-      <div class="tree" id="treeViewport"><div class="tree-stage" id="treeStage"><div class="tree-root" id="treeRoot"></div></div></div>
+      <div class="tree tree-compact-mode" id="treeViewport"><div class="tree-stage" id="treeStage"><div class="tree-root" id="treeRoot"></div></div></div>
     </section>
   </main>
 
@@ -1350,7 +1440,9 @@ function renderTreeNode(m){
   const recipeUi=!isRoot&&rs.length>1
     ? `<select class="tree-subrecipe-select" data-tree-recipe-path="${esc(path)}" title="이 단계 조합식 선택">${rs.map((r,i)=>`<option value="${i}" ${i===selectedRecipeIndex?"selected":""}>${esc(fmt(r.order))}번 · ${esc(recipeFormulaDisplay(r))}</option>`).join("")}</select>`
     : (rec?`<div class="meta">${esc(formula)}</div>`:"");
-  const node=`<div class="tree-node ${isRoot?"root-node":""}">${henchImg(name,"hench-img tree-img")||`<div class="img-placeholder">이미지 없음</div>`}<button class="core-link name" data-core="${esc(name)}">${esc(name)}</button>${lvControl}<div class="meta">${esc(info)}</div>${recipeUi}${warn}${calcWarn}${preview}</div>`;
+  const tooltip=[name,info,formula?`조합: ${formula}`:"",materialInvalid?`재료 사용 불가: Lv ${reqBase} 이상 필요`:"",over?`성수 구간: 기본만렙 ${displayMax} 초과`:"",!calc&&rec?"목표 Lv 자동 역산 불가":""].filter(Boolean).join("\n");
+  const hasWarning=!!(materialInvalid||over||(!calc&&rec));
+  const node=`<div class="tree-node ${isRoot?"root-node":""}" data-has-warning="${hasWarning?1:0}" title="${esc(tooltip)}">${henchImg(name,"hench-img tree-img")||`<div class="img-placeholder">이미지 없음</div>`}<button class="core-link name" data-core="${esc(name)}">${esc(name)}</button>${lvControl}<div class="meta">${esc(info)}</div>${recipeUi}${warn}${calcWarn}${preview}</div>`;
   const renderedChildren=children.map(ch=>ch.model?renderTreeNode(ch.model):"").filter(Boolean);
   if(!renderedChildren.length) return `<div class="tree-branch">${node}</div>`;
   return `<div class="tree-branch">${node}<div class="tree-children">${renderedChildren.join("")}</div></div>`;
@@ -1376,7 +1468,8 @@ function applyTreeScale(scale,{center=true}={}){
   if(!viewport||!stage||!root) return;
   if(!treeNaturalWidth||!treeNaturalHeight) measureTreeNaturalSize();
 
-  treeScale=Math.max(.06,Math.min(2,Number(scale)||1));
+  const minManual=$("#treeViewport")?.classList.contains("tree-compact-mode")?.72:.65;
+  treeScale=Math.max(minManual,Math.min(2,Number(scale)||1));
 
   stage.style.width=Math.max(1,Math.ceil(treeNaturalWidth*treeScale))+"px";
   stage.style.height=Math.max(1,Math.ceil(treeNaturalHeight*treeScale))+"px";
@@ -1399,9 +1492,14 @@ function fitTreeToViewport(center=true){
   measureTreeNaturalSize();
 
   const available=Math.max(220,viewport.clientWidth-24);
-  const scale=Math.min(1,available/treeNaturalWidth);
+  const wanted=Math.min(1,available/treeNaturalWidth);
+  // 글자가 안 보일 정도의 30~40% 축소는 금지.
+  // 한눈에 보기에서는 카드 자체를 작게 만들고 88% 이하로는 축소하지 않는다.
+  // 상세보기에서도 78% 아래로는 내려가지 않고 대신 가로 이동을 허용한다.
+  const minReadable=viewport.classList.contains("tree-compact-mode")?.88:.78;
+  const scale=Math.max(minReadable,wanted);
 
-  applyTreeScale(Math.max(.06,scale),{center});
+  applyTreeScale(scale,{center});
 }
 
 function refreshTreeViewAfterRender(){
@@ -1520,7 +1618,17 @@ $("#treeGo").onclick=()=>{
   window.activeMix=n;renderTree();
 };
 
-const treeZoomOut=$("#treeZoomOut"),treeZoomIn=$("#treeZoomIn"),treeFit=$("#treeFit");
+const treeZoomOut=$("#treeZoomOut"),treeZoomIn=$("#treeZoomIn"),treeFit=$("#treeFit"),treeModeToggle=$("#treeModeToggle");
+
+if(treeModeToggle) treeModeToggle.onclick=()=>{
+  const viewport=$("#treeViewport");
+  if(!viewport) return;
+  const compact=viewport.classList.toggle("tree-compact-mode");
+  treeModeToggle.textContent=compact?"상세보기":"한눈에보기";
+  treeModeToggle.title=compact?"카드 상세정보 표시":"간단한 카드로 전체 구조 보기";
+  treeAutoFit=true;
+  requestAnimationFrame(()=>fitTreeToViewport(true));
+};
 
 if(treeZoomOut) treeZoomOut.onclick=()=>{
   treeAutoFit=false;
