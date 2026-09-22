@@ -562,8 +562,7 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
         <select class="select" id="treeDepth" title="표시 단계" style="max-width:120px"><option>3단계</option><option>4단계</option><option selected>5단계</option><option>6단계</option><option>7단계</option><option>8단계</option></select>
         <button class="region-btn" id="treeGo">계산해서 펼치기</button>
         <div class="tree-view-controls" aria-label="믹스트리 카드 보기">
-          <button type="button" class="tree-view-btn" id="treeModeToggle" title="기본 카드/상세 카드 전환">상세카드</button>
-          <span class="tree-zoom-label">100% 고정</span>
+          <button type="button" class="tree-view-btn" id="treeModeToggle" title="현재는 간단카드 · 누르면 상세카드로 전환">상세카드</button>
         </div>
       </div>
       <div class="tree-calc-notice">※ 믹스트리의 레벨 계산값은 <b>참고용</b>입니다. 게임 서버의 실제 계산식이 공개되어 있지 않아 일부 코어·특수 조합에서는 실제 결과와 차이가 날 수 있습니다. <b>중요한 믹스 전에는 다른 자료와 게임 내 정보까지 함께 이중·삼중으로 반드시 재확인해 주세요.</b></div>
@@ -993,7 +992,10 @@ let currentView="cores";
 let viewWorkTimer=0;
 function runViewWork(id){
   if(id==="zones" && !zonesRendered) renderZones();
-  if(id==="mix" && !mixRendered) refreshMixResults();
+  if(id==="mix"){
+    if(!mixRendered) refreshMixResults();
+    syncTreeViewOnVisible();
+  }
   if(id==="saved") renderSavedHench();
 }
 function switchView(id){
@@ -1012,6 +1014,7 @@ function switchView(id){
   if(window.scrollY) requestAnimationFrame(()=>window.scrollTo(0,0));
   if(viewWorkTimer) clearTimeout(viewWorkTimer);
   viewWorkTimer=setTimeout(()=>{viewWorkTimer=0;runViewWork(id);},0);
+  if(id==="mix") requestAnimationFrame(()=>syncTreeViewOnVisible());
 }
 document.querySelector(".tabs").addEventListener("click",e=>{
   const b=e.target.closest(".tab[data-view]");
@@ -1556,7 +1559,10 @@ function applyTreeScale(_scale,{center=true}={}){
   root.style.transform="none";
   stage.style.width=Math.max(1,treeNaturalWidth)+"px";
   stage.style.height=Math.max(1,treeNaturalHeight)+"px";
-  if(center){
+
+  // 믹스트리 탭이 숨겨진 상태에서 미리 렌더되면 clientWidth가 0에 가까워
+  // 첫 진입 스크롤 위치가 엉뚱하게 잡힐 수 있다. 실제로 보일 때만 중앙 정렬한다.
+  if(center && viewport.clientWidth>80 && viewport.offsetParent!==null){
     requestAnimationFrame(()=>{
       viewport.scrollTop=0;
       viewport.scrollLeft=Math.max(0,(viewport.scrollWidth-viewport.clientWidth)/2);
@@ -1570,6 +1576,24 @@ function fitTreeToViewport(center=true){
 
 function refreshTreeViewAfterRender(){
   requestAnimationFrame(()=>applyTreeScale(1,{center:true}));
+}
+
+let treeVisibleSyncRaf=0;
+function syncTreeViewOnVisible(){
+  if(treeVisibleSyncRaf) cancelAnimationFrame(treeVisibleSyncRaf);
+  let tries=0;
+  const run=()=>{
+    const viewport=$("#treeViewport");
+    if(!viewport) return;
+    if(viewport.clientWidth>80 && viewport.offsetParent!==null){
+      applyTreeScale(1,{center:true});
+      // 첫 페인트 뒤 폰트/이미지 레이아웃이 한 번 더 안정된 다음 재확인
+      requestAnimationFrame(()=>applyTreeScale(1,{center:true}));
+      return;
+    }
+    if(++tries<8) treeVisibleSyncRaf=requestAnimationFrame(run);
+  };
+  treeVisibleSyncRaf=requestAnimationFrame(run);
 }
 
 function renderTree(){
