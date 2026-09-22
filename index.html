@@ -535,7 +535,7 @@ const coreGroupOf = name => D.coreGroups?.[name] ?? null;
 // DB의 max 값에 의존하지 않고 이름별 고정 Lv를 명시해 목표 레벨 계산에서 절대 변동시키지 않는다.
 const FIXED_LEVEL_CORES = new Map([
   ["고대드라코",189], ["고대메타코",189], ["고대미스코",187], ["고대버그코",188],
-  ["고대버드코",186], ["고대비스코",187], ["고대플라코",186],
+  ["고대버드코",186], ["고대비스코",187], ["고대플라코",186], ["고대데빌코",188],
   ["폭주에보드라코",200], ["폭주에보데빌코",200], ["폭주에보비스코",200], ["폭주에보버드코",200],
   ["폭주에보버그코",200], ["폭주에보플라코",200], ["폭주에보미스코",200], ["폭주에보메타코",200]
 ]);
@@ -1189,14 +1189,14 @@ function calcMaterialLevels(targetLv,rec){
       if(!resultContains(result,targetLv)) continue;
 
       const r1=lv1-base1,r2=lv2-base2;
-      let score;
-      if(fixed1&&!fixed2) score=r2*100000+lv2;
-      else if(fixed2&&!fixed1) score=r1*100000+lv1;
-      else if(base1>base2) score=r1*100000000+(r1+r2)*100000+Math.max(lv1,lv2)*100+Math.abs(lv1-lv2);
-      else if(base2>base1) score=r2*100000000+(r1+r2)*100000+Math.max(lv1,lv2)*100+Math.abs(lv1-lv2);
-      else score=(r1+r2)*100000000+Math.abs(lv1-lv2)*100000+Math.max(lv1,lv2);
+      // 같은 목표 Lv를 만들 수 있다면 총 육성량이 적은 조합을 먼저 고르고,
+      // 그다음 두 재료가 한쪽으로 과도하게 몰리지 않도록 균형에 가깝게 추천한다.
+      // (기존 방식은 높은 기렙 재료를 무조건 보호해 낮은 쪽 하나만 수십 Lv 올리는 경우가 매우 많았다.)
+      let score=(r1+r2)*1000000000 + Math.abs(lv1-lv2)*1000000 + Math.max(lv1,lv2)*1000 + Math.abs(r1-r2);
+      if(fixed1&&!fixed2) score=r2*1000000000+lv2*1000;
+      else if(fixed2&&!fixed1) score=r1*1000000000+lv1*1000;
       // 확정 결과를 .5 랜덤보다 우선한다.
-      if(result.random) score+=500000000000;
+      if(result.random) score+=1000000000000000;
       if(result.confidence==="estimated") score+=1000;
       if(!best||score<best.score) best={lv1,lv2,result,score,fixed1,fixed2,source:result.confidence};
     }
@@ -1247,14 +1247,14 @@ function treeNode(name,desiredLv,depth,seen,recipeIndex=0,isRoot=false,path="r",
   if(materialInvalid) warn+=`<div class="tree-warn">재료로 사용 불가 · 이 조합은 Lv ${esc(reqBase)} 이상 필요</div>`;
   if(!isRoot&&Number.isFinite(displayBase)&&desiredLv<displayBase&&!materialInvalid) warn+=`<div class="tree-note">기렙 미만 결과물 · 생성 자체는 가능, 재료 사용 시 기렙까지 육성 필요</div>`;
 
-  let calc=null,calcWarn="",preview="",kids=[];
+  let calc=null,calcWarn="",preview="",kids=[],currentResult=null;
   if(rec&&Number.isFinite(desiredLv)){
     calc=calcMaterialLevels(desiredLv,rec);
     const b1=recipeMaterialBase(rec,1),b2=recipeMaterialBase(rec,2);
     const p1=`${path}.0`,p2=`${path}.1`;
     const auto1=calc?.lv1 ?? b1,auto2=calc?.lv2 ?? b2;
     const lv1=effectiveTreeLevel(p1,auto1),lv2=effectiveTreeLevel(p2,auto2);
-    const currentResult=calcMixResult(rec,lv1,lv2);
+    currentResult=calcMixResult(rec,lv1,lv2);
     preview=previewHtml(currentResult,desiredLv);
     kids=[
       {name:rec.mat1,lv:lv1,path:p1,requiredBase:b1,autoLv:auto1},
@@ -1268,7 +1268,8 @@ function treeNode(name,desiredLv,depth,seen,recipeIndex=0,isRoot=false,path="r",
 
   let lvControl;
   if(isRoot){
-    lvControl=`<div class="need-lv root">목표 Lv ${esc(fmt(desiredLv))}</div>`;
+    const liveResult=currentResult?.valid&&currentResult?.known?resultText(currentResult):`Lv ${fmt(desiredLv)}`;
+    lvControl=`<div class="need-lv root">예상 결과 ${esc(liveResult)}</div><div class="meta">설정 목표 Lv ${esc(fmt(desiredLv))}</div>`;
   }else{
     const manual=treeManualLevels.has(path);
     const cls=materialInvalid?" invalid":"";
@@ -1281,19 +1282,24 @@ function treeNode(name,desiredLv,depth,seen,recipeIndex=0,isRoot=false,path="r",
   const next=new Set(seen);next.add(name);
   return `<div class="tree-branch">${node}<div class="tree-children">${kids.map(k=>treeNode(k.name,k.lv,depth-1,next,0,false,k.path,k.requiredBase)).join("")}</div></div>`;
 }
-$("#treeRoot").addEventListener("change",e=>{
+$("#treeRoot").addEventListener("input",e=>{
   const input=e.target.closest(".tree-level-edit");
   if(!input||input.disabled) return;
   const n=Number(input.value),path=input.dataset.treePath;
   if(!path) return;
   if(Number.isFinite(n)&&n>=1) treeManualLevels.set(path,Math.floor(n));
   else treeManualLevels.delete(path);
+  // 숫자 화살표/직접 타이핑 즉시 예상 결과를 갱신한다.
   renderTree();
+  requestAnimationFrame(()=>{
+    const next=$("#treeRoot").querySelector(`.tree-level-edit[data-tree-path="${path}"]`);
+    if(next&&!next.disabled){next.focus();}
+  });
 });
 $("#treeRoot").addEventListener("keydown",e=>{
   const input=e.target.closest(".tree-level-edit");
   if(!input||e.key!=="Enter") return;
-  e.preventDefault();input.blur();
+  e.preventDefault();
 });
 $("#treeRoot").addEventListener("click",e=>{
   const btn=e.target.closest("[data-tree-reset]");
