@@ -215,6 +215,11 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .img-placeholder{width:68px;height:68px;margin:0 auto 7px;border:1px dashed rgba(151,168,189,.28);border-radius:12px;display:grid;place-items:center;color:#64758a;font-size:10px;background:rgba(7,14,26,.22)}
 @media(max-width:560px){.tree-img{width:60px;height:60px}.material-img{width:50px;height:50px}.detail-img{width:82px;height:82px;flex-basis:82px}.core-thumb{width:36px;height:36px;flex-basis:36px}}
 
+/* 검색/필터 INP 개선: 결과를 한 번에 전부 붙이지 않고 일정 수씩 점진 렌더링 */
+.core-load-more-wrap{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+.core-load-more-wrap[hidden]{display:none!important}
+.core-load-more-btn{min-width:120px}
+.core-load-more-info{color:var(--muted);font-size:12px}
 
 /* ===== 헨치 즐겨찾기 저장 (localStorage) ===== */
 .save-btn{
@@ -607,6 +612,10 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
     </section>
     <section class="panel">
       <div class="table-wrap"><table><thead><tr><th>헨치</th><th>티어</th><th>종족</th><th>공격거리</th><th>기렙</th><th>기본 최대Lv</th><th>득코</th><th>코어그룹</th><th>대표 출현 위치</th></tr></thead><tbody id="coreBody"></tbody></table></div>
+      <div class="core-load-more-wrap" id="coreLoadMoreWrap" hidden>
+        <button type="button" class="region-btn core-load-more-btn" id="coreLoadMore">더 보기</button>
+        <span class="core-load-more-info" id="coreLoadMoreInfo"></span>
+      </div>
     </section>
   </main>
 
@@ -830,7 +839,17 @@ Object.assign(HENCH_IMG, NEW_HENCH_IMAGE_OVERRIDES);
 function henchImg(name, cls="hench-img", lazy=true){
   const src=HENCH_IMG[name];
   if(!src) return "";
-  return `<img class="${cls}" src="${src}" alt="${esc(name)}" ${lazy?'loading="lazy" fetchpriority="low"':''} decoding="async" draggable="false">`;
+  const size = cls.includes("detail-img") ? 100
+    : cls.includes("tree-img") ? 68
+    : cls.includes("material-img") ? 56
+    : cls.includes("saved-thumb") ? 54
+    : cls.includes("recipe-target-img") ? 52
+    : cls.includes("core-thumb") ? 42
+    : cls.includes("search-thumb") ? 38
+    : cls.includes("chip-thumb") ? 28
+    : null;
+  const intrinsic=size?` width="${size}" height="${size}"`:"";
+  return `<img class="${cls}" src="${src}" alt="${esc(name)}"${intrinsic} ${lazy?'loading="lazy" fetchpriority="low"':''} decoding="async" draggable="false">`;
 }
 const norm = s => String(s??"").trim().toLowerCase();
 const fmt = v => (v===null||v===undefined||v==="") ? "-" : String(v);
@@ -1206,17 +1225,74 @@ const CORE_SORTED={
   })
 };
 const CORE_BY_NAME=new Map(CORE_VIEW.map(v=>[v.c.name,v]));
-let coreRowsMaterialized=false;
+const CORE_RENDER_CHUNK=60;
 let lastCoreRenderKey="";
-function captureCoreRows(){
-  if(coreRowsMaterialized) return;
-  for(const tr of $("#coreBody").children){
-    const name=tr.querySelector?.("[data-core]")?.dataset?.core;
-    const v=name?CORE_BY_NAME.get(name):null;
-    if(v) v.rowEl=tr;
-  }
-  coreRowsMaterialized=CORE_VIEW.every(v=>v.rowEl);
+let currentCoreRows=[];
+let coreVisibleCount=0;
+let coreRenderTimer=0;
+let coreRenderFrame=0;
+
+function syncCoreRowSavedState(v){
+  const row=v?.rowEl;
+  if(!row) return;
+  const btn=row.querySelector("[data-save-core]");
+  if(!btn) return;
+  const on=isSavedHench(v.c.name);
+  btn.classList.toggle("saved",on);
+  btn.textContent=on?"★":"☆";
+  btn.title=on?"즐겨찾기에서 제거":"즐겨찾기에 추가";
+  btn.setAttribute("aria-label",btn.title);
 }
+
+function coreRowElement(v){
+  if(!v.rowEl){
+    const holder=document.createElement("tbody");
+    holder.innerHTML=v.rowHtml.trim();
+    v.rowEl=holder.firstElementChild;
+  }
+  syncCoreRowSavedState(v);
+  return v.rowEl;
+}
+
+function updateCoreLoadMore(){
+  const wrap=$("#coreLoadMoreWrap"), btn=$("#coreLoadMore"), info=$("#coreLoadMoreInfo");
+  if(!wrap||!btn||!info) return;
+  const remaining=Math.max(0,currentCoreRows.length-coreVisibleCount);
+  wrap.hidden=!remaining;
+  if(remaining){
+    btn.textContent=`더 보기 (${Math.min(CORE_RENDER_CHUNK,remaining).toLocaleString()}개)`;
+    info.textContent=`${coreVisibleCount.toLocaleString()} / ${currentCoreRows.length.toLocaleString()}개 표시`;
+  }else{
+    info.textContent=currentCoreRows.length?`${currentCoreRows.length.toLocaleString()}개 모두 표시`:"";
+  }
+}
+
+function appendCoreRows(reset=false){
+  const body=$("#coreBody");
+  if(!body) return;
+  if(reset){
+    body.replaceChildren();
+    coreVisibleCount=0;
+  }
+  if(!currentCoreRows.length){
+    const tr=document.createElement("tr");
+    tr.innerHTML='<td colspan="9" class="empty">조건에 맞는 헨치가 없습니다.</td>';
+    body.replaceChildren(tr);
+    updateCoreLoadMore();
+    return;
+  }
+
+  const end=Math.min(currentCoreRows.length,coreVisibleCount+CORE_RENDER_CHUNK);
+  const frag=document.createDocumentFragment();
+  for(let i=coreVisibleCount;i<end;i++){
+    const row=coreRowElement(currentCoreRows[i]);
+    if(row) frag.appendChild(row);
+  }
+  body.appendChild(frag);
+  coreVisibleCount=end;
+  updateCoreLoadMore();
+}
+
 function renderCoreTable(){
   const q=norm($("#coreSearch").value), sp=$("#speciesFilter").value, region=$("#regionFilter").value, coreGroup=$("#coreGroupFilter").value, tier=$("#tierFilter").value, range=$("#rangeFilter").value, kind=$("#kindFilter").value, sort=$("#sortFilter")?.value||"name";
   const key=[q,sp,region,coreGroup,tier,range,kind,sort].join("\u0001");
@@ -1237,35 +1313,29 @@ function renderCoreTable(){
     if(kind==="used" && !st.used) continue;
     rows.push(v);
   }
+  currentCoreRows=rows;
   $("#coreCountLine").textContent=`검색 결과 ${rows.length.toLocaleString()}개`;
-  const body=$("#coreBody");
-
-  if(!coreRowsMaterialized){
-    // 최초 1회만 HTML을 만들고 이후 검색/필터에서는 같은 <tr> 노드를 재사용합니다.
-    body.innerHTML=rows.length?rows.map(v=>v.rowHtml).join(""):`<tr><td colspan="9" class="empty">조건에 맞는 헨치가 없습니다.</td></tr>`;
-    captureCoreRows();
-  }else if(rows.length){
-    const frag=document.createDocumentFragment();
-    for(const v of rows) if(v.rowEl) frag.appendChild(v.rowEl);
-    body.replaceChildren(frag);
-  }else{
-    const tr=document.createElement("tr");
-    tr.innerHTML='<td colspan="9" class="empty">조건에 맞는 헨치가 없습니다.</td>';
-    body.replaceChildren(tr);
-  }
-  bindCoreLinks();
+  appendCoreRows(true);
 }
-let coreRenderTimer=0;
+
 function scheduleCoreRender(delay=0){
   if(coreRenderTimer) clearTimeout(coreRenderTimer);
   coreRenderTimer=setTimeout(()=>{
     coreRenderTimer=0;
-    renderCoreTable();
+    if(coreRenderFrame) cancelAnimationFrame(coreRenderFrame);
+    coreRenderFrame=requestAnimationFrame(()=>{
+      coreRenderFrame=0;
+      renderCoreTable();
+    });
   },delay);
 }
-// 타이핑 이벤트 자체는 즉시 페인트시키고, 실제 853행 필터 작업은 아주 짧게 디바운스합니다.
+
+// 입력 이벤트에서는 무거운 DOM 작업을 하지 않고 다음 프레임에 최대 60행만 갱신합니다.
 $("#coreSearch").addEventListener("input",()=>scheduleCoreRender(70),{passive:true});
 ["speciesFilter","regionFilter","coreGroupFilter","tierFilter","rangeFilter","kindFilter","sortFilter"].forEach(id=>$("#"+id).addEventListener("change",()=>scheduleCoreRender(0)));
+$("#coreLoadMore")?.addEventListener("click",()=>{
+  requestAnimationFrame(()=>appendCoreRows(false));
+});
 
 let coreLinkDelegationReady=false;
 function bindCoreLinks(){
