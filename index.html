@@ -70,6 +70,19 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .zone h4{margin:0 0 10px;font-size:14px}.core-chips{display:flex;flex-wrap:wrap;gap:7px}
 .chip{border:1px solid var(--line);background:#111d30;color:#dce7f4;padding:6px 8px;border-radius:9px;font-size:11px}
 .chip:hover{border-color:var(--accent);color:var(--accent)}
+/* 사냥터 카드의 크기와 글자 수는 유지하고, 종족별 얇은 색띠/틴트만 더한다. */
+.zone .chip.species-card{
+  border-color:var(--species-border,var(--line));
+  background:linear-gradient(90deg,var(--species-strip,#66758a) 0 4px,var(--species-tint,#111d30) 4px 100%);
+}
+.zone .chip.species-bird{--species-strip:#77bfe8;--species-border:rgba(119,191,232,.38);--species-tint:rgba(119,191,232,.075)}
+.zone .chip.species-plant{--species-strip:#76cfa4;--species-border:rgba(118,207,164,.36);--species-tint:rgba(118,207,164,.07)}
+.zone .chip.species-dragon{--species-strip:#df8585;--species-border:rgba(223,133,133,.38);--species-tint:rgba(223,133,133,.07)}
+.zone .chip.species-beast{--species-strip:#8f6346;--species-border:rgba(166,119,83,.42);--species-tint:rgba(143,99,70,.085)}
+.zone .chip.species-insect{--species-strip:#d89558;--species-border:rgba(216,149,88,.40);--species-tint:rgba(216,149,88,.075)}
+.zone .chip.species-metal{--species-strip:#aa91d6;--species-border:rgba(170,145,214,.40);--species-tint:rgba(170,145,214,.075)}
+.zone .chip.species-mystery{--species-strip:#d8c982;--species-border:rgba(216,201,130,.40);--species-tint:rgba(216,201,130,.07)}
+.zone .chip.species-demon{--species-strip:#657181;--species-border:rgba(151,165,181,.48);--species-tint:rgba(113,125,140,.095)}
 .mix-search-grid{display:grid;grid-template-columns:360px 1fr;gap:14px}
 .search-results{border:1px solid var(--line);border-radius:13px;max-height:520px;overflow:auto;background:#0d1727}
 .search-item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;color:#eaf2fa;padding:10px 12px}
@@ -136,6 +149,8 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .drawer-card{position:absolute;right:0;top:0;height:100%;width:min(640px,94vw);background:#0c1524;border-left:1px solid var(--line);box-shadow:-20px 0 60px rgba(0,0,0,.35);overflow:auto;padding:20px}
 .drawer-close{position:sticky;top:0;float:right;border:1px solid var(--line);background:#111c2d;color:#fff;border-radius:10px;padding:7px 10px;z-index:2}
 .detail-title{font-size:26px;margin:12px 0 6px}.detail-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.detail-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+.share-btn{padding:7px 10px;font-size:11px;font-weight:800;min-width:104px}
 .detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 18px}
 .kpi{border:1px solid var(--line);background:#101b2d;border-radius:12px;padding:10px}.kpi span{display:block;font-size:10px;color:var(--muted)}.kpi b{font-size:16px}
 .section{margin:19px 0}.section h4{margin:0 0 9px;font-size:14px}
@@ -588,7 +603,7 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
     <section class="panel">
       <div class="panel-title"><h3>헨치 통합 검색</h3><small id="coreCountLine"></small></div>
       <div class="controls">
-        <input class="input" id="coreSearch" placeholder="헨치 이름 검색 (예: 뉴델코이)">
+        <input class="input" id="coreSearch" placeholder="헨치 이름/초성 검색 (예: 뉴델코이, ㄴㄷㅋㅇ)">
         <select class="select" id="speciesFilter"></select>
         <select class="select" id="regionFilter"></select>
         <select class="select" id="coreGroupFilter"></select>
@@ -678,6 +693,7 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
         <select class="select" id="rootRecipe" style="max-width:390px"></select>
         <select class="select" id="treeDepth" title="표시 단계" style="max-width:120px"><option>3단계</option><option>4단계</option><option selected>5단계</option><option>6단계</option><option>7단계</option><option>8단계</option></select>
         <button class="region-btn" id="treeGo">계산해서 펼치기</button>
+        <button class="region-btn share-btn" id="treeShareButton" type="button">공유 링크 복사</button>
         <div class="tree-view-controls" aria-label="믹스트리 카드 보기">
           <button type="button" class="tree-view-btn" id="treeModeToggle" title="현재는 간단카드 · 누르면 상세카드로 전환">상세카드</button>
         </div>
@@ -852,8 +868,19 @@ function henchImg(name, cls="hench-img", lazy=true){
   return `<img class="${cls}" src="${src}" alt="${esc(name)}"${intrinsic} ${lazy?'loading="lazy" fetchpriority="low"':''} decoding="async" draggable="false">`;
 }
 const norm = s => String(s??"").trim().toLowerCase();
+const HANGUL_INITIALS="ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+function choseongOf(value){
+  let out="";
+  for(const ch of norm(value)){
+    const code=ch.charCodeAt(0);
+    out+=(code>=0xac00&&code<=0xd7a3)?HANGUL_INITIALS[Math.floor((code-0xac00)/588)]:ch;
+  }
+  return out;
+}
+const isChoseongQuery = value => /^[ㄱ-ㅎ]+$/.test(value);
 const fmt = v => (v===null||v===undefined||v==="") ? "-" : String(v);
 const speciesClass = s => "sp-"+(s||"미확인");
+const speciesCardClass = s => ({"새":"species-bird","식물":"species-plant","드래곤":"species-dragon","짐승":"species-beast","곤충":"species-insect","메탈":"species-metal","미스터리":"species-mystery","악마":"species-demon"}[s]||"");
 
 // 문의 백엔드 Worker 주소. Cloudflare Worker 배포 후 URL을 여기에 넣습니다.
 const INQUIRY_API_URL = "https://mixmaster-inquiry.pok-choha.workers.dev";
@@ -1209,7 +1236,8 @@ const CORE_VIEW=D.cores.map(c=>{
       <td>${coreGroupOf(c.name)?`<span class="badge core-group">${esc(coreGroupOf(c.name))}</span>`:"<span class='muted'>-</span>"}</td>
       <td class="muted">${esc(firstDrop)}</td>
     </tr>`;
-  return {c,st,nameNorm:norm(c.name),regionSet,rowHtml};
+  const nameChoseong=choseongOf(c.name);
+  return {c,st,nameNorm:norm(c.name),nameChoseong,nameChoseongLoose:nameChoseong.replace(/ㅇ/g,""),regionSet,rowHtml};
 });
 const CORE_SORTED={
   name:[...CORE_VIEW].sort((a,b)=>a.c.name.localeCompare(b.c.name,"ko")),
@@ -1295,6 +1323,7 @@ function appendCoreRows(reset=false){
 
 function renderCoreTable(){
   const q=norm($("#coreSearch").value), sp=$("#speciesFilter").value, region=$("#regionFilter").value, coreGroup=$("#coreGroupFilter").value, tier=$("#tierFilter").value, range=$("#rangeFilter").value, kind=$("#kindFilter").value, sort=$("#sortFilter")?.value||"name";
+  const choseongQuery=isChoseongQuery(q);
   const key=[q,sp,region,coreGroup,tier,range,kind,sort].join("\u0001");
   if(key===lastCoreRenderKey) return;
   lastCoreRenderKey=key;
@@ -1302,7 +1331,7 @@ function renderCoreTable(){
   const rows=[];
   for(const v of source){
     const c=v.c, st=v.st;
-    if(q && !v.nameNorm.includes(q)) continue;
+    if(q && !v.nameNorm.includes(q) && !(choseongQuery&&(v.nameChoseong.includes(q)||v.nameChoseongLoose.includes(q)))) continue;
     if(sp && c.species!==sp) continue;
     if(region && !v.regionSet.has(region)) continue;
     if(coreGroup && coreGroupOf(c.name)!==coreGroup) continue;
@@ -1357,7 +1386,7 @@ function openCore(name){
     <div class="eyebrow">HENCH DETAIL</div>
     <div class="detail-hero">
       ${henchImg(name,"hench-img detail-img",false) || `<div class="img-placeholder detail-img">이미지 없음</div>`}
-      <div class="detail-title-wrap"><h2 class="detail-title">${esc(name)}</h2><div style="margin-top:8px">${savedStar(name)}</div></div>
+      <div class="detail-title-wrap"><h2 class="detail-title">${esc(name)}</h2><div class="detail-actions">${savedStar(name)}<button class="secondary-btn share-btn" type="button" id="henchShareButton">공유 링크 복사</button></div></div>
     </div>
     <div class="detail-badges">
       <span class="badge"><span class="sp ${speciesClass(c.species)}">${esc(c.species||"종족 미확인")}</span></span>
@@ -1393,6 +1422,7 @@ function openCore(name){
     </div></div>`;
   $("#drawer").classList.add("open");
   $("#drawerClose").onclick=closeDrawer;
+  $("#henchShareButton").onclick=e=>shareHenchLink(name,e.currentTarget);
   bindCoreLinks();
 }
 function recipeHtml(r){
@@ -1430,7 +1460,7 @@ function renderZones(){
   for(const h of rows){const key=h.area||"세부 지역 미표기";if(!groups.has(key))groups.set(key,[]);groups.get(key).push(h);}
   $("#zoneGrid").innerHTML=[...groups.entries()].map(([sub,arr])=>{
     const sorted=[...arr].sort((a,b)=>{const ac=coreMap.get(a.core),bc=coreMap.get(b.core);return (Number(ac?.base)||9999)-(Number(bc?.base)||9999)||a.core.localeCompare(b.core,"ko")});
-    return `<div class="zone"><h4>${esc(sub)} <span class="muted">· ${sorted.length}종</span></h4><div class="core-chips">${sorted.map(h=>{const c=coreMap.get(h.core);return `<button class="chip" data-core="${esc(h.core)}" title="${esc(h.source||'출현 확인')}">${henchImg(h.core,"hench-img chip-thumb")}<span class="sp ${speciesClass(c?.species)}">${esc(h.core)}</span></button>`}).join("")}</div></div>`;
+    return `<div class="zone"><h4>${esc(sub)} <span class="muted">· ${sorted.length}종</span></h4><div class="core-chips">${sorted.map(h=>{const c=coreMap.get(h.core);return `<button class="chip species-card ${speciesCardClass(c?.species)}" data-core="${esc(h.core)}" title="${esc(h.source||'출현 확인')}">${henchImg(h.core,"hench-img chip-thumb")}<span class="sp ${speciesClass(c?.species)}">${esc(h.core)}</span></button>`}).join("")}</div></div>`;
   }).join("")||`<div class="empty">기록이 없습니다.</div>`;
   bindCoreLinks();
 }
@@ -1472,6 +1502,100 @@ $("#mixSearch").addEventListener("input",()=>{
 const treeManualLevels=new Map();
 const treeRecipeChoices=new Map();
 function clearTreeManualLevels(){treeManualLevels.clear();treeRecipeChoices.clear();}
+
+function buildShareUrl(params){
+  const url=new URL(window.location.href);
+  url.hash=params.toString();
+  return url.toString();
+}
+async function copyShareText(value){
+  if(navigator.clipboard?.writeText){
+    try{await navigator.clipboard.writeText(value);return;}catch(_){}
+  }
+  const area=document.createElement("textarea");
+  area.value=value;
+  area.setAttribute("readonly","");
+  area.style.cssText="position:fixed;left:-9999px;top:0;opacity:0";
+  document.body.appendChild(area);
+  area.focus();area.select();
+  const copied=document.execCommand?.("copy");
+  area.remove();
+  if(!copied) throw new Error("copy failed");
+}
+function showShareFeedback(button,ok=true){
+  if(!button) return;
+  const original=button.dataset.shareLabel||button.textContent;
+  button.dataset.shareLabel=original;
+  button.textContent=ok?"링크 복사됨":"복사 실패";
+  clearTimeout(button._shareTimer);
+  button._shareTimer=setTimeout(()=>{if(button.isConnected) button.textContent=original;},1400);
+}
+async function shareHenchLink(name,button){
+  const params=new URLSearchParams({view:"hench",name});
+  try{await copyShareText(buildShareUrl(params));showShareFeedback(button,true);}
+  catch(_){showShareFeedback(button,false);}
+}
+async function shareTreeLink(button){
+  const target=$("#treeTarget").value.trim()||window.activeMix||"";
+  const lv=Math.floor(Number($("#treeTargetLv").value));
+  if(!recipesByTarget.has(target)||!Number.isFinite(lv)||lv<1){showShareFeedback(button,false);return;}
+  const params=new URLSearchParams({
+    view:"tree",target,lv:String(lv),
+    recipe:String(Number($("#rootRecipe").value)||0),
+    depth:String(Math.max(3,Math.min(8,parseInt($("#treeDepth").value,10)||5))),
+    mode:$("#treeViewport").classList.contains("tree-compact-mode")?"compact":"detail"
+  });
+  if(treeManualLevels.size) params.set("manual",JSON.stringify([...treeManualLevels]));
+  if(treeRecipeChoices.size) params.set("choices",JSON.stringify([...treeRecipeChoices]));
+  try{await copyShareText(buildShareUrl(params));showShareFeedback(button,true);}
+  catch(_){showShareFeedback(button,false);}
+}
+function restoreTreePairs(raw,targetMap,kind){
+  if(!raw) return;
+  try{
+    const pairs=JSON.parse(raw);
+    if(!Array.isArray(pairs)) return;
+    for(const pair of pairs){
+      if(!Array.isArray(pair)||pair.length!==2||!/^r(?:\.[01])+$/.test(pair[0])) continue;
+      const value=Number(pair[1]);
+      if(kind==="level"&&Number.isFinite(value)&&value>=1) targetMap.set(pair[0],Math.floor(value));
+      if(kind==="choice"&&Number.isInteger(value)&&value>=0) targetMap.set(pair[0],value);
+    }
+  }catch(_){}
+}
+function restoreSharedState(){
+  const raw=window.location.hash.replace(/^#/,"");
+  if(!raw) return;
+  const params=new URLSearchParams(raw);
+  const view=params.get("view");
+  if(view==="hench"){
+    const name=params.get("name")||"";
+    if(!coreMap.has(name)) return;
+    switchView("cores");
+    openCore(name);
+    return;
+  }
+  if(view!=="tree") return;
+  const target=params.get("target")||"";
+  if(!recipesByTarget.has(target)) return;
+  closeDrawer();
+  switchView("mix");
+  selectMix(target);
+  const lv=Math.floor(Number(params.get("lv")));
+  if(Number.isFinite(lv)&&lv>=1) $("#treeTargetLv").value=String(lv);
+  const depth=Math.max(3,Math.min(8,Math.floor(Number(params.get("depth")))||5));
+  $("#treeDepth").value=`${depth}단계`;
+  const rootIndex=Math.floor(Number(params.get("recipe"))||0);
+  if(rootIndex>=0&&rootIndex<(recipesByTarget.get(target)||[]).length) $("#rootRecipe").value=String(rootIndex);
+  clearTreeManualLevels();
+  restoreTreePairs(params.get("manual"),treeManualLevels,"level");
+  restoreTreePairs(params.get("choices"),treeRecipeChoices,"choice");
+  const compact=params.get("mode")!=="detail";
+  $("#treeViewport").classList.toggle("tree-compact-mode",compact);
+  $("#treeModeToggle").textContent=compact?"상세카드":"간단카드";
+  renderTree();
+  requestAnimationFrame(syncTreeViewOnVisible);
+}
 function selectMix(name){
   window.activeMix=name;
   lastMixQuery=null;
@@ -2029,6 +2153,7 @@ if(treeModeToggle) treeModeToggle.onclick=()=>{
   treeModeToggle.title=compact?"기존 상세 카드로 전환":"이미지·이름·필요 Lv 중심 카드로 전환";
   requestAnimationFrame(()=>applyTreeScale(1,{center:true}));
 };
+$("#treeShareButton").onclick=e=>shareTreeLink(e.currentTarget);
 
 window.addEventListener("resize",()=>{
   applyTreeScale(1,{center:false});
@@ -2309,6 +2434,8 @@ function initInquiry(){
 bindCoreLinks();
 initSavedHench();
 renderCoreTable();
+restoreSharedState();
+window.addEventListener("hashchange",restoreSharedState);
 // 숨겨진 탭은 클릭 이벤트 안에서 바로 무겁게 그리지 않습니다.
 // 브라우저가 완전히 한가할 때만 가볍게 미리 준비하여 실제 탭 클릭 INP를 낮춥니다.
 const warmHiddenViews=()=>{
