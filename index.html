@@ -156,7 +156,6 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .section{margin:19px 0}.section h4{margin:0 0 9px;font-size:14px}
 .list{display:grid;gap:7px}.list-item{border:1px solid var(--line);background:#101b2d;border-radius:11px;padding:10px;font-size:12px}
 .list-item button{border:0;background:none;color:#fff;padding:0;font-weight:750}.list-item small{display:block;color:var(--muted);margin-top:4px;line-height:1.5}
-.footer{color:#75869c;font-size:11px;text-align:center;padding:18px 0;line-height:1.8}.footer a{color:#9de9dd;text-decoration:none;font-weight:700}.footer a:hover{text-decoration:underline}
 @media(max-width:900px){
  .hero{grid-template-columns:1fr}.controls{grid-template-columns:1fr 1fr}.mix-search-grid{grid-template-columns:1fr}.zone-grid{grid-template-columns:1fr}
  .header-inner{align-items:flex-start;flex-direction:column}.tabs{margin-left:0;width:100%}.detail-grid{grid-template-columns:repeat(2,1fr)}
@@ -828,7 +827,6 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
     </section>
   </main>
 
-  <div class="footer">데이터 기준: 믹마 족보 공유.xlsx · 외부 서버/라이브러리 없이 단일 HTML로 동작</div>
 </div>
 
 <div class="drawer" id="drawer">
@@ -993,6 +991,223 @@ for(const h of (D.habitats||[])){
   if(!habitatsByGroup.has(h.group)) habitatsByGroup.set(h.group,[]);
   habitatsByGroup.get(h.group).push(h);
 }
+
+// ===== 내부 데이터 검수 (일반 UI 미노출, 개발자 콘솔 전용) =====
+// 사용: await window.__MM_INTERNAL__.runDataAudit()
+// 실제 이미지 응답까지 확인: await window.__MM_INTERNAL__.runDataAudit({verifyImageFiles:true})
+const INTERNAL_AUDIT_EXPECTED = Object.freeze({
+  fixedLevels:Object.freeze({
+    "고대드라코":189,"고대메타코":189,"고대미스코":187,"고대버그코":188,
+    "고대버드코":186,"고대비스코":187,"고대플라코":186,"고대데빌코":188,
+    "폭주에보드라코":200,"폭주에보데빌코":200,"폭주에보비스코":200,"폭주에보버드코":200,
+    "폭주에보버그코":200,"폭주에보플라코":200,"폭주에보미스코":200,"폭주에보메타코":200
+  }),
+  specialMaterials:Object.freeze({
+    "폭주니놈|1":Object.freeze({base1:130,base2:130,variant1:"뉴니놈(130)",variant2:"뉴미르(130)"}),
+    "폭주미르|1":Object.freeze({base1:130,base2:130,variant1:"뉴미르(130)",variant2:"뉴치치(130)"}),
+    "폭주치치|1":Object.freeze({base1:130,base2:130,variant1:"뉴치치(130)",variant2:"뉴앵앵(130)"}),
+    "폭주앵앵|1":Object.freeze({base1:130,base2:130,variant1:"뉴앵앵(130)",variant2:"뉴니놈(130)"})
+  }),
+  fixedSamples:Object.freeze({
+    "불멸해적스피니안|1":Object.freeze({lv1:216,lv2:210,low:216,high:216}),
+    "바키르|1":Object.freeze({lv1:1,lv2:1,low:1,high:1}),
+    "흑강시|3":Object.freeze({lv1:65,lv2:65,low:72,high:72}),
+    "폭주니놈|1":Object.freeze({lv1:177,lv2:177,low:187,high:187})
+  }),
+  oldKhan:Object.freeze(["데빌칸","드라칸","메타칸","미스칸","버그칸","버드칸","비스칸","플라칸"]),
+  newKhan:Object.freeze(["이블칸","서펜칸","머신칸","매지칸","비틀칸","크로칸","타이칸","베지칸"]),
+  allowedCoreGroups:Object.freeze([
+    "DK","구칸","구코","구키스","구폭","네오1차","네오2차","네오데저트","데미","데저트",
+    "불데미","불마헨","불멸구키스","불멸상위해적4차","불멸시난","상위불멸","상위불멸해적",
+    "상위해적","시난","신칸","신코","신키스","신폭","일본 한정 코어","폭마헨","폭주구키스",
+    "폭주네오","폭주데미","폭주데저트","폭주시난","폭주신키스","폭클","하위불멸","하위불멸해적",
+    "하위해적","해적4차","화산코"
+  ]),
+  allowedHabitatAliases:Object.freeze(["엘리시온|7층 드래곤방"])
+});
+
+function internalAuditSameFields(actual,expected){
+  return !!actual && Object.entries(expected).every(([key,value])=>actual[key]===value);
+}
+
+async function runInternalDataAudit(options={}){
+  const verifyImageFiles=options.verifyImageFiles===true;
+  const log=options.log!==false;
+  const issues={
+    missingCoreReferences:[],
+    duplicateRecipes:[],
+    invalidLevels:[],
+    missingImageReferences:[],
+    malformedImageReferences:[],
+    orphanImageReferences:[],
+    invalidHabitatReferences:[],
+    invalidCoreGroupReferences:[],
+    specialExceptionDamage:[],
+    brokenImageFiles:[]
+  };
+  const coreNames=new Set((D.cores||[]).map(c=>c?.name).filter(Boolean));
+  const habitatAreaKeys=new Set((D.habitatAreas||[]).map(a=>`${a?.group||""}|${a?.area||""}`));
+  const allowedHabitatAliases=new Set(INTERNAL_AUDIT_EXPECTED.allowedHabitatAliases);
+  const allowedCoreGroups=new Set(INTERNAL_AUDIT_EXPECTED.allowedCoreGroups);
+  const seenRecipeOrders=new Map();
+  const seenRecipeCombinations=new Map();
+
+  (D.recipes||[]).forEach((recipe,index)=>{
+    for(const field of ["target","mat1","mat2"]){
+      const name=recipe?.[field];
+      if(name && !coreNames.has(name)) issues.missingCoreReferences.push({source:"recipe",index,field,name});
+    }
+    const orderKey=`${recipe?.target||""}|${Number(recipe?.order)||1}`;
+    if(seenRecipeOrders.has(orderKey)){
+      issues.duplicateRecipes.push({kind:"target-order",key:orderKey,firstIndex:seenRecipeOrders.get(orderKey),index});
+    }else seenRecipeOrders.set(orderKey,index);
+    const sides=[
+      `${recipe?.mat1||""}|${recipe?.stage1??""}`,
+      `${recipe?.mat2||""}|${recipe?.stage2??""}`
+    ].sort((a,b)=>a.localeCompare(b,"ko"));
+    const combinationKey=`${recipe?.target||""}|${sides.join("|")}`;
+    if(seenRecipeCombinations.has(combinationKey)){
+      issues.duplicateRecipes.push({kind:"same-combination",key:combinationKey,firstIndex:seenRecipeCombinations.get(combinationKey),index});
+    }else seenRecipeCombinations.set(combinationKey,index);
+  });
+
+  (D.cores||[]).forEach((core,index)=>{
+    const base=Number(core?.base),max=Number(core?.max);
+    if(Number.isFinite(base)&&Number.isFinite(max)&&base>max){
+      issues.invalidLevels.push({index,name:core?.name,base,max});
+    }
+    const src=HENCH_IMG[core?.name];
+    if(!src) issues.missingImageReferences.push({name:core?.name});
+  });
+
+  Object.entries(HENCH_IMG).forEach(([name,src])=>{
+    if(!coreNames.has(name)) issues.orphanImageReferences.push({name,src});
+    if(typeof src!=="string" || !/^client_hench\/mh\d{3}\.png$/.test(src)){
+      issues.malformedImageReferences.push({name,src});
+    }
+  });
+
+  (D.habitats||[]).forEach((habitat,index)=>{
+    if(!coreNames.has(habitat?.core)){
+      issues.missingCoreReferences.push({source:"habitat",index,field:"core",name:habitat?.core});
+    }
+    const key=`${habitat?.group||""}|${habitat?.area||""}`;
+    if(!habitatAreaKeys.has(key) && !allowedHabitatAliases.has(key)){
+      issues.invalidHabitatReferences.push({index,group:habitat?.group,area:habitat?.area,core:habitat?.core});
+    }
+  });
+
+  (D.drops||[]).forEach((drop,index)=>{
+    if(!coreNames.has(drop?.core)){
+      issues.missingCoreReferences.push({source:"drop",index,field:"core",name:drop?.core});
+    }
+    if(typeof drop?.region!=="string" || !drop.region.trim() || typeof drop?.sub!=="string" || !drop.sub.trim()){
+      issues.invalidHabitatReferences.push({source:"drop",index,region:drop?.region,sub:drop?.sub,core:drop?.core});
+    }
+  });
+
+  Object.entries(D.coreGroups||{}).forEach(([name,group])=>{
+    if(!coreNames.has(name) || typeof group!=="string" || !allowedCoreGroups.has(group)){
+      issues.invalidCoreGroupReferences.push({name,group});
+    }
+  });
+
+  const damage=(name,expected,actual)=>issues.specialExceptionDamage.push({name,expected,actual});
+  for(const [name,level] of Object.entries(INTERNAL_AUDIT_EXPECTED.fixedLevels)){
+    if(FIXED_LEVEL_CORES.get(name)!==level) damage(`FIXED_LEVEL_CORES:${name}`,level,FIXED_LEVEL_CORES.get(name));
+  }
+  if(FIXED_LEVEL_CORES.size!==Object.keys(INTERNAL_AUDIT_EXPECTED.fixedLevels).length){
+    damage("FIXED_LEVEL_CORES:size",Object.keys(INTERNAL_AUDIT_EXPECTED.fixedLevels).length,FIXED_LEVEL_CORES.size);
+  }
+  for(const [key,expected] of Object.entries(INTERNAL_AUDIT_EXPECTED.specialMaterials)){
+    const actual=SPECIAL_RECIPE_MATERIALS.get(key);
+    if(!internalAuditSameFields(actual,expected)) damage(`SPECIAL_RECIPE_MATERIALS:${key}`,expected,actual||null);
+  }
+  for(const [key,expected] of Object.entries(INTERNAL_AUDIT_EXPECTED.fixedSamples)){
+    const actual=SERVER_MIX_SAMPLES.get(key)?.[0];
+    if(!internalAuditSameFields(actual,expected)) damage(`SERVER_MIX_SAMPLES:${key}`,expected,actual||null);
+  }
+  const hasRecipe=(target,fields)=>(D.recipes||[]).some(r=>r?.target===target&&internalAuditSameFields(r,fields));
+  if(!hasRecipe("네오건스매쉬",{mat1:"버그칸",stage1:"4",mat2:"뉴라운드비틀",stage2:"4"})){
+    damage("recipe:네오건스매쉬","버그칸(4) + 뉴라운드비틀(4)",null);
+  }
+  if(!hasRecipe("실버란샤",{mat1:"겜마리오",stage1:"1",mat2:"가메라카",stage2:"1"})){
+    damage("recipe:실버란샤","겜마리오(1) + 가메라카(1)",null);
+  }
+  if(!hasRecipe("불멸솔브레이커",{mat1:"네오건스매쉬",stage1:"6",mat2:"버드키스",stage2:"6"})){
+    damage("recipe:불멸솔브레이커","네오건스매쉬(6) + 버드키스(6)",null);
+  }
+  const huhuHabitats=(D.habitats||[]).filter(h=>h?.core==="후후");
+  if(huhuHabitats.length!==1 || huhuHabitats[0]?.group!=="엘리시온" || huhuHabitats[0]?.area!=="7층 드래곤방"){
+    damage("habitat:후후",[{group:"엘리시온",area:"7층 드래곤방",core:"후후"}],huhuHabitats);
+  }
+  for(const name of INTERNAL_AUDIT_EXPECTED.oldKhan){
+    if(D.coreGroups?.[name]!=="구칸") damage(`coreGroup:${name}`,"구칸",D.coreGroups?.[name]??null);
+  }
+  for(const name of INTERNAL_AUDIT_EXPECTED.newKhan){
+    if(D.coreGroups?.[name]!=="신칸") damage(`coreGroup:${name}`,"신칸",D.coreGroups?.[name]??null);
+  }
+
+  const imageFileVerification={requested:verifyImageFiles,checked:0,unverifiable:[]};
+  if(verifyImageFiles){
+    const paths=[...new Set(Object.values(HENCH_IMG).filter(src=>typeof src==="string"))];
+    let cursor=0;
+    const verifyOne=async src=>{
+      try{
+        let response=await fetch(src,{method:"HEAD",cache:"no-store"});
+        if(response.status===405) response=await fetch(src,{method:"GET",cache:"no-store"});
+        imageFileVerification.checked++;
+        if(!response.ok) issues.brokenImageFiles.push({src,status:response.status});
+      }catch(error){
+        imageFileVerification.unverifiable.push({src,error:String(error?.message||error)});
+      }
+    };
+    const workers=Array.from({length:Math.min(8,paths.length)},async()=>{
+      while(cursor<paths.length){
+        const src=paths[cursor++];
+        await verifyOne(src);
+      }
+    });
+    await Promise.all(workers);
+  }
+
+  const issueCount=Object.values(issues).reduce((sum,list)=>sum+list.length,0);
+  const report={
+    ok:issueCount===0,
+    generatedAt:new Date().toISOString(),
+    summary:{
+      cores:(D.cores||[]).length,
+      recipes:(D.recipes||[]).length,
+      habitats:(D.habitats||[]).length,
+      habitatAreas:(D.habitatAreas||[]).length,
+      coreGroups:Object.keys(D.coreGroups||{}).length,
+      imageMappings:Object.keys(HENCH_IMG).length,
+      uniqueImagePaths:new Set(Object.values(HENCH_IMG)).size,
+      issueCount
+    },
+    issues,
+    imageFileVerification
+  };
+  if(log && typeof console!=="undefined"){
+    const label=`[MixMaster internal audit] ${report.ok?"PASS":"ISSUES"} (${issueCount})`;
+    console.groupCollapsed(label);
+    console.table(report.summary);
+    for(const [category,list] of Object.entries(issues)) if(list.length){
+      console.warn(category,list);
+    }
+    if(imageFileVerification.unverifiable.length) console.warn("unverifiableImageFiles",imageFileVerification.unverifiable);
+    console.groupEnd();
+  }
+  return report;
+}
+
+Object.defineProperty(window,"__MM_INTERNAL__",{
+  value:Object.freeze({runDataAudit:runInternalDataAudit}),
+  enumerable:false,
+  configurable:false,
+  writable:false
+});
+
 for(const arr of recipesByTarget.values()) arr.sort((a,b)=>(Number(a.order)||0)-(Number(b.order)||0));
 
 const preferredRegionOrder=["일반 사냥터","프리미엄존","엘리시온","로제타 지하","루나틱 월드","리인커네 던전","밸러의 던전","시난의 유적지","퍼즐의 정원","침묵의 탑","침묵의 탑 4층","출석체크 사냥터","기타 던전 · 유적"];
