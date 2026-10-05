@@ -926,6 +926,22 @@ td{border-bottom-color:rgba(34,72,101,.48)}
 }
 .region-btn,.secondary-btn,.primary-btn,.chip{border-color:rgba(60,126,157,.35);box-shadow:none}
 
+/* PC에서는 페이지 배경과 배너 원화를 같은 좌표에 포개 한 장면처럼 연결한다. */
+@media(min-width:901px){
+  body:before{background-size:auto,max(1400px,100vw) auto}
+  .hero-visual{
+    left:calc(50% - 50vw);
+    right:calc(50% - 50vw);
+    background-color:transparent;
+    background-image:url("assets/hench-hero-chibi-v2.png");
+    background-position:center top;
+    background-size:max(1400px,100vw) auto;
+    background-repeat:no-repeat;
+    background-attachment:fixed;
+  }
+  .hero-scene-img{opacity:0}
+}
+
 @media(max-width:900px){
   .brand>div:last-child{min-width:0}.brand h1{white-space:nowrap}
 }
