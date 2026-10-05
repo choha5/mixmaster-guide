@@ -1241,6 +1241,9 @@ td{border-bottom-color:rgba(34,72,101,.48)}
 
 <script>
 const D = window.MM_DATA;
+// 사용자 실게임 확인 교정: 독각귀의 종족은 악마.
+const dokgakwiCore = D.cores.find(core=>core.name==="독각귀");
+if(dokgakwiCore) dokgakwiCore.species="악마";
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = v => String(v ?? "").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
