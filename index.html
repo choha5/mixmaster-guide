@@ -954,6 +954,38 @@ td{border-bottom-color:rgba(34,72,101,.48)}
   .stat-icon{opacity:.27}.stat:nth-child(2) .stat-icon{opacity:.25}.stat:nth-child(3) .stat-icon{opacity:.28}
 }
 
+/* 믹스트리와 독립된 수량 계산 패널 */
+.prep-panel .panel-title{margin-bottom:16px}
+.prep-controls{display:grid;grid-template-columns:minmax(230px,1fr) minmax(115px,150px) minmax(115px,150px) auto;align-items:end;gap:10px}
+.prep-controls label{display:block;margin-bottom:6px;color:#9db5c8;font-size:11px;font-weight:800}
+.prep-search-wrap{position:relative;min-width:0}
+.prep-run{min-height:44px;padding:10px 17px;white-space:nowrap;color:#dffefa;border-color:rgba(99,225,207,.42);background:rgba(99,225,207,.10);font-weight:800}
+.prep-suggestions{display:none;position:absolute;z-index:30;top:calc(100% + 5px);left:0;right:0;max-height:260px;overflow:auto;padding:4px;border:1px solid var(--line);border-radius:11px;background:#0a1d30;box-shadow:0 16px 35px rgba(0,0,0,.35)}
+.prep-suggestions.open{display:block}
+.prep-suggestions button{display:flex;align-items:center;gap:8px;width:100%;padding:6px 9px;border:0;border-radius:8px;background:transparent;color:#e7f3fb;text-align:left}
+.prep-suggestions button:hover,.prep-suggestions button:focus{background:rgba(99,225,207,.10);color:var(--accent)}
+.prep-suggestions .search-thumb{width:30px;height:30px;flex:0 0 30px}
+.prep-message{margin:10px 0 0;color:#9eb3c4;font-size:12px;line-height:1.5}
+.prep-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-top:17px}
+.prep-stat{min-width:0;padding:12px 14px;border:1px solid rgba(70,137,170,.27);border-radius:12px;background:rgba(5,24,40,.70)}
+.prep-stat span{display:block;color:#8fa9bc;font-size:11px}.prep-stat b{display:block;margin-top:3px;color:#f0f9fb;font-size:19px;line-height:1.3;overflow-wrap:anywhere}
+.prep-stat small{display:block;margin-top:2px;color:#8fa9bc;font-size:10px}
+.prep-section{margin-top:22px}.prep-section h4{margin:0 0 10px;font-size:14px;color:#eaf7fb}
+.prep-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:9px}
+.prep-item{min-width:0;padding:10px 11px;border:1px solid rgba(70,137,170,.25);border-radius:12px;background:rgba(5,22,37,.69)}
+.prep-item-head{display:flex;align-items:center;gap:9px;min-width:0}
+.prep-item .material-img{width:45px;height:45px;flex:0 0 45px}
+.prep-item-name{min-width:0;flex:1}.prep-item-name button{border:0;padding:0;background:none;color:#f2fbff;font-weight:800;text-align:left;overflow-wrap:anywhere}
+.prep-item-name button:hover{color:var(--accent)}
+.prep-count{flex:0 0 auto;color:#8ee9da;font-weight:900;font-size:15px;font-variant-numeric:tabular-nums}
+.prep-item small{display:block;margin-top:5px;color:#9db0c1;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+.prep-item .select{margin-top:8px;min-height:38px;padding:7px 9px;font-size:11px}
+.prep-note{display:inline-block;margin-top:6px;color:#edd18b;font-size:10px;font-weight:800}
+.prep-more{margin-top:10px}
+.prep-enchants{display:flex;flex-wrap:wrap;gap:7px}
+.prep-enchants span{padding:7px 10px;border:1px solid rgba(99,225,207,.25);border-radius:9px;background:rgba(99,225,207,.055);color:#c8e8e4;font-size:11px}
+@media(max-width:650px){.prep-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.prep-search-wrap,.prep-run{grid-column:1/-1}.prep-list{grid-template-columns:minmax(0,1fr)}.prep-panel .panel-title{align-items:flex-start;flex-direction:column;gap:3px}}
+
 </style>
 </head>
 <body>
@@ -1103,6 +1135,19 @@ td{border-bottom-color:rgba(34,72,101,.48)}
       </div>
       <div class="tree-calc-notice">※ 일반 믹스 레벨은 <b>카페 공개 엑셀 계산식</b>을 기준으로 계산합니다. 저레벨 코어·130 특수재료 조합·실측 예외는 별도 처리하며, 서버 특수 규칙이 확인되지 않은 조합은 계산을 제한합니다. <b>중요한 믹스 전에는 게임 내 정보와 함께 재확인해 주세요.</b></div>
       <div class="tree tree-compact-mode" id="treeViewport"><div class="tree-stage" id="treeStage"><div class="tree-root" id="treeRoot"></div></div></div>
+    </section>
+    <section class="panel prep-panel" id="mixPrepPanel">
+      <div class="panel-title"><h3>믹스 준비물</h3><small>믹스트리에 보이는 헨치를 이름별로 합산합니다</small></div>
+      <div class="prep-controls">
+        <div class="prep-search-wrap"><label for="prepTarget">목표 헨치</label><input class="input" id="prepTarget" placeholder="이름 또는 초성 검색" autocomplete="off"><div class="prep-suggestions" id="prepSuggestions"></div></div>
+        <div><label for="prepQuantity">목표 수량</label><input class="input" id="prepQuantity" type="number" min="1" max="999" step="1" value="1"></div>
+        <div><label for="prepDepth">계산 단계</label><select class="select" id="prepDepth"><option value="3">3단계</option><option value="4">4단계</option><option value="5" selected>5단계</option><option value="6">6단계</option><option value="7">7단계</option><option value="8">8단계</option></select></div>
+        <button class="region-btn prep-run" id="prepCalculate" type="button">준비물 계산</button>
+      </div>
+      <p class="prep-message" id="prepMessage" role="status" aria-live="polite">목표 헨치를 선택해 주세요.</p>
+      <div id="prepResults" hidden>
+        <div class="prep-section"><h4>필요 헨치</h4><div class="prep-list" id="prepMaterials"></div></div>
+      </div>
     </section>
   </main>
 
@@ -3079,6 +3124,175 @@ function initInquiry(){
   $("#inqLookupPassword").addEventListener("keydown",e=>{if(e.key==="Enter")lookupInquiry()});
   if(sessionStorage.getItem("mm_admin_password")){adminLogin().catch(()=>{});}
 }
+
+// ===== 믹스 준비물: 기존 목표 레벨 믹스트리와 분리된 수량 계산 =====
+function calculateMixPrep(target, quantity, depth, choices, recipeMap, cores){
+  if(!cores.has(target)||!Number.isInteger(quantity)||quantity<1||quantity>999||!Number.isInteger(depth)||depth<1||depth>8) throw Error("목표, 수량 또는 계산 단계가 올바르지 않습니다.");
+  let visits=0;
+  function addCount(map,key,count){
+    const next=(map.get(key)||0)+count;
+    if(!Number.isSafeInteger(next)||next<0) throw Error("계산 수량이 너무 큽니다.");
+    map.set(key,next);
+  }
+  function mergeCounts(into,from){
+    for(const [name,count] of from) addCount(into,name,count);
+  }
+  function empty(){
+    return {crafted:new Map(),materials:new Map(),limited:new Set(),enchantStages:new Map(),issues:new Map(),enchantedMixes:0,mixedStageMixes:0};
+  }
+  function expand(name,path,remaining,nodePath){
+    if(++visits>10000) throw Error("조합 경로가 너무 복잡합니다.");
+    if(remaining<=0){
+      const limited=empty();
+      limited.materials.set(name,1);
+      if((recipeMap.get(name)||[]).length) limited.limited.add(name);
+      else if(!cores.has(name)) limited.issues.set(name,"등록되지 않은 헨치");
+      else if(cores.get(name).publicRecipeUnavailable) limited.issues.set(name,"공개 조합식 미확인");
+      return limited;
+    }
+    if(path.has(name)){
+      const cycle=empty();
+      cycle.materials.set(name,1);
+      cycle.issues.set(name,"순환 참조");
+      return cycle;
+    }
+    const result=empty(), core=cores.get(name), options=recipeMap.get(name)||[];
+    if(!core||!options.length){
+      result.materials.set(name,1);
+      if(!core) result.issues.set(name,"등록되지 않은 헨치");
+      else if(core.publicRecipeUnavailable) result.issues.set(name,"공개 조합식 미확인");
+      return result;
+    }
+    const requested=Number(choices.get(nodePath)??choices.get(name));
+    const index=Number.isInteger(requested)&&requested>=0&&requested<options.length?requested:0;
+    const recipe=options[index];
+    if(!recipe.mat1||!recipe.mat2){
+      result.materials.set(name,1);
+      result.issues.set(name,"조합식 재료 미확인");
+      return result;
+    }
+    result.crafted.set(name,1);
+    const stages=new Set([recipe.stage1,recipe.stage2].map(Number).filter(n=>Number.isInteger(n)&&n>0));
+    for(const stage of stages) addCount(result.enchantStages,stage,1);
+    if(stages.size) result.enchantedMixes=1;
+    if(stages.size>1) result.mixedStageMixes=1;
+    path.add(name);
+    for(const [index,material] of [recipe.mat1,recipe.mat2].entries()){
+      const sub=expand(material,path,remaining-1,nodePath+"."+index);
+      mergeCounts(result.crafted,sub.crafted);
+      mergeCounts(result.materials,sub.materials);
+      for(const key of sub.limited) result.limited.add(key);
+      mergeCounts(result.enchantStages,sub.enchantStages);
+      for(const [key,reason] of sub.issues) result.issues.set(key,reason);
+      result.enchantedMixes+=sub.enchantedMixes;
+      result.mixedStageMixes+=sub.mixedStageMixes;
+    }
+    path.delete(name);
+    return result;
+  }
+  // 믹스트리의 표시 단계와 동일하게: 목표가 1단계, 화면 끝의 카드가 준비물이다.
+  const unit=expand(target,new Set(),depth-1,"r");
+  const scaled=empty();
+  for(const key of ["crafted","materials","enchantStages"]){
+    for(const [name,count] of unit[key]) addCount(scaled[key],name,count*quantity);
+  }
+  scaled.issues=unit.issues;
+  scaled.limited=unit.limited;
+  scaled.enchantedMixes=unit.enchantedMixes*quantity;
+  scaled.mixedStageMixes=unit.mixedStageMixes*quantity;
+  scaled.totalMix=[...scaled.crafted.values()].reduce((sum,n)=>sum+n,0);
+  if(!Number.isSafeInteger(scaled.totalMix)) throw Error("계산 수량이 너무 큽니다.");
+  scaled.target=target;
+  scaled.quantity=quantity;
+  scaled.depth=depth;
+  return scaled;
+}
+
+const PREP_NAMES=[...coreMap.keys()].sort((a,b)=>a.localeCompare(b,"ko"));
+const PREP_SEARCH=PREP_NAMES.map(name=>({name,normal:norm(name),initial:choseongOf(name),loose:choseongOf(name).replace(/ㅇ/g,"")}));
+let prepTargetName="",prepHasRun=false;
+function prepMatches(query){
+  const q=norm(query);
+  if(!q) return [];
+  return PREP_SEARCH.filter(row=>row.normal.includes(q)||row.initial.includes(q)||row.loose.includes(q)).slice(0,12).map(row=>row.name);
+}
+function showPrepSuggestions(){
+  const matches=prepMatches($("#prepTarget").value), box=$("#prepSuggestions");
+  box.innerHTML=matches.map(name=>'<button type="button" data-prep-pick="'+esc(name)+'">'+(henchImg(name,"hench-img search-thumb")||"")+'<span>'+esc(name)+'</span></button>').join("");
+  box.classList.toggle("open",matches.length>0);
+}
+function prepItemHtml(name,count){
+  const image=henchImg(name,"hench-img material-img")||'<span class="img-placeholder material-img">?</span>';
+  return '<div class="prep-item"><div class="prep-item-head">'+image+'<div class="prep-item-name"><button type="button" data-core="'+esc(name)+'">'+esc(name)+'</button></div><span class="prep-count">×'+count.toLocaleString()+'</span></div></div>';
+}
+function sortedPrepEntries(map){
+  return [...map.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],"ko"));
+}
+function visiblePrepCounts(result){
+  const visible=new Map(result.materials);
+  for(const [name,count] of result.crafted){
+    const shown=count-(name===result.target?result.quantity:0);
+    if(shown>0) visible.set(name,(visible.get(name)||0)+shown);
+  }
+  return visible;
+}
+function renderMixPrep(result){
+  const visible=visiblePrepCounts(result);
+  $("#prepMaterials").innerHTML=sortedPrepEntries(visible).map(([name,count])=>prepItemHtml(name,count)).join("")||'<div class="muted">표시할 헨치가 없습니다.</div>';
+  $("#prepResults").hidden=false;
+  $("#prepMessage").textContent=result.issues.size?"일부 조합식이 미확인되었거나 순환되어 해당 지점에서 계산을 멈췄습니다.":result.depth+"단계 표시 헨치 "+visible.size+"종";
+  if(result.issues.size) console.warn("[Mix prep] stopped paths",Object.fromEntries(result.issues));
+}
+function runMixPrep(){
+  const input=$("#prepTarget").value.trim();
+  let name=coreMap.has(input)?input:(prepTargetName===input?prepTargetName:"");
+  if(!name){
+    const matches=prepMatches(input);
+    if(matches.length===1) name=matches[0];
+  }
+  const quantity=Number($("#prepQuantity").value);
+  const depth=Number($("#prepDepth").value);
+  if(!name||!Number.isInteger(quantity)||quantity<1||quantity>999){
+    $("#prepResults").hidden=true;
+    $("#prepMessage").textContent=!name?"목표 헨치를 목록에서 선택해 주세요.":"목표 수량은 1~999 사이의 정수로 입력해 주세요.";
+    return;
+  }
+  prepTargetName=name;
+  $("#prepTarget").value=name;
+  $("#prepSuggestions").classList.remove("open");
+  try{
+    const choices=new Map();
+    if($("#treeTarget").value.trim()===name){
+      for(const [path,index] of treeRecipeChoices) choices.set(path,index);
+      choices.set("r",Number($("#rootRecipe").value)||0);
+    }
+    renderMixPrep(calculateMixPrep(name,quantity,depth,choices,recipesByTarget,coreMap));
+    prepHasRun=true;
+  }catch(error){
+    $("#prepResults").hidden=true;
+    $("#prepMessage").textContent=error.message||"준비물 계산을 완료하지 못했습니다.";
+    console.warn("[Mix prep] calculation stopped",error);
+  }
+}
+$("#prepTarget").addEventListener("input",()=>{
+  prepTargetName="";
+  prepHasRun=false;
+  $("#prepResults").hidden=true;
+  showPrepSuggestions();
+});
+$("#prepTarget").addEventListener("focus",showPrepSuggestions);
+$("#prepTarget").addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();runMixPrep();}});
+$("#prepSuggestions").addEventListener("click",event=>{
+  const button=event.target.closest("[data-prep-pick]");
+  if(!button) return;
+  prepTargetName=button.dataset.prepPick;
+  $("#prepTarget").value=prepTargetName;
+  $("#prepSuggestions").classList.remove("open");
+  $("#prepMessage").textContent="준비물 계산을 눌러 주세요.";
+});
+$("#prepQuantity").addEventListener("input",()=>{if(prepHasRun) runMixPrep();});
+$("#prepDepth").addEventListener("change",()=>{if(prepHasRun) runMixPrep();});
+$("#prepCalculate").addEventListener("click",runMixPrep);
 
 bindCoreLinks();
 initSavedHench();
