@@ -157,7 +157,7 @@ tbody tr:hover{background:rgba(90,215,196,.045)}
 .list{display:grid;gap:7px}.list-item{border:1px solid var(--line);background:#101b2d;border-radius:11px;padding:10px;font-size:12px}
 .list-item button{border:0;background:none;color:#fff;padding:0;font-weight:750}.list-item small{display:block;color:var(--muted);margin-top:4px;line-height:1.5}
 @media(max-width:900px){
- .hero{grid-template-columns:1fr}.controls{grid-template-columns:1fr 1fr}.mix-search-grid{grid-template-columns:1fr}.zone-grid{grid-template-columns:1fr}
+ .hero{grid-template-columns:1fr}.controls{grid-template-columns:1fr 1fr}.mix-search-grid,.recipe-list{grid-template-columns:minmax(0,1fr)}.mix-search-grid>div,.recipe-card{min-width:0}.zone-grid{grid-template-columns:1fr}
  .header-inner{align-items:flex-start;flex-direction:column}.tabs{margin-left:0;width:100%}.detail-grid{grid-template-columns:repeat(2,1fr)}
 }
 @media(max-width:560px){
