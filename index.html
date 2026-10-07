@@ -838,6 +838,9 @@ body:before{
   -webkit-mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.96) 58%,transparent 96%);
   mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.96) 58%,transparent 96%);
 }
+@supports (background-image:image-set(url("assets/night-world-background-v2.webp") type("image/webp"))){
+  body:before{background-image:linear-gradient(180deg,rgba(1,7,17,.06) 0%,rgba(2,10,21,.18) 38%,rgba(3,13,24,.72) 78%,#040e19 100%),image-set(url("assets/night-world-background-v2.webp") type("image/webp"),url("assets/night-world-background-v2.png") type("image/png"))}
+}
 body:after{
   z-index:0;opacity:1;
   background:
@@ -934,6 +937,7 @@ td{border-bottom-color:rgba(34,72,101,.48)}
     right:calc(50% - 50vw);
     background-color:transparent;
     background-image:url("assets/hench-hero-chibi-v2.png");
+    background-image:image-set(url("assets/hench-hero-chibi-v2.webp") type("image/webp"),url("assets/hench-hero-chibi-v2.png") type("image/png"));
     background-position:center top;
     background-size:max(1400px,100vw) auto;
     background-repeat:no-repeat;
@@ -1020,7 +1024,7 @@ td{border-bottom-color:rgba(34,72,101,.48)}
         <p>헨치 검색부터 사냥터, 득코 위치, 기렙, 조합식과 상위 제작처까지 한눈에 확인하세요.</p>
       </div>
       <div class="hero-visual">
-        <img class="hero-scene-img" src="assets/hench-hero-chibi-v2.png" alt="믹스마스터 헨치를 귀엽게 재해석한 야간 판타지 장면" width="2157" height="729" loading="eager" fetchpriority="high" decoding="async">
+        <picture><source srcset="assets/hench-hero-chibi-v2.webp" type="image/webp"><img class="hero-scene-img" src="assets/hench-hero-chibi-v2.png" alt="믹스마스터 헨치를 귀엽게 재해석한 야간 판타지 장면" width="2157" height="729" loading="eager" fetchpriority="high" decoding="async"></picture>
       </div>
     </div>
     <div class="hero-side"><div class="stats">
@@ -1851,7 +1855,7 @@ function runViewWork(id){
   if(id==="zones" && !zonesRendered) renderZones();
   if(id==="mix"){
     if(!mixRendered) refreshMixResults();
-    syncTreeViewOnVisible();
+    else syncTreeViewOnVisible();
   }
   if(id==="saved") renderSavedHench();
 }
@@ -1871,7 +1875,6 @@ function switchView(id){
   if(window.scrollY) requestAnimationFrame(()=>window.scrollTo(0,0));
   if(viewWorkTimer) clearTimeout(viewWorkTimer);
   viewWorkTimer=setTimeout(()=>{viewWorkTimer=0;runViewWork(id);},0);
-  if(id==="mix") requestAnimationFrame(()=>syncTreeViewOnVisible());
 }
 document.querySelector(".tabs").addEventListener("click",e=>{
   const b=e.target.closest(".tab[data-view]");
@@ -2169,6 +2172,25 @@ const MIX_NAMES=[...recipesByTarget.keys()].sort((a,b)=>a.localeCompare(b,"ko"))
 const MIX_NAME_NORM=new Map(MIX_NAMES.map(n=>[n,norm(n)]));
 let mixRendered=false;
 let lastMixQuery=null;
+let mixResultNames=[];
+let mixVisibleCount=0;
+let initialTreePending=false;
+const initialTreeObserver="IntersectionObserver" in window?new IntersectionObserver(entries=>{
+  if(initialTreePending&&currentView==="mix"&&entries.some(entry=>entry.isIntersecting)){
+    initialTreePending=false;
+    initialTreeObserver.disconnect();
+    renderTree();
+  }
+},{rootMargin:"200px"}):null;
+function mixResultHtml(names){
+  return names.map(n=>`<button class="search-item ${n===window.activeMix?"active":""}" data-target="${esc(n)}">${henchImg(n,"hench-img search-thumb")}<span class="search-item-text">${esc(n)} <span class="muted">· ${(recipesByTarget.get(n)||[]).length}식</span></span></button>`).join("");
+}
+function appendMixResults(){
+  if(mixVisibleCount>=mixResultNames.length) return;
+  const next=Math.min(mixVisibleCount+40,mixResultNames.length);
+  $("#mixResultList").insertAdjacentHTML("beforeend",mixResultHtml(mixResultNames.slice(mixVisibleCount,next)));
+  mixVisibleCount=next;
+}
 function refreshMixResults(){
   mixRendered=true;
   const q=norm($("#mixSearch").value);
@@ -2179,9 +2201,21 @@ function refreshMixResults(){
     if(!q||MIX_NAME_NORM.get(n).includes(q)) names.push(n);
     if(names.length>=180) break;
   }
-  $("#mixResultList").innerHTML=names.map(n=>`<button class="search-item ${n===window.activeMix?"active":""}" data-target="${esc(n)}">${henchImg(n,"hench-img search-thumb")}<span class="search-item-text">${esc(n)} <span class="muted">· ${(recipesByTarget.get(n)||[]).length}식</span></span></button>`).join("");
-  if(!window.activeMix && names[0]) selectMix(names[0]);
+  mixResultNames=names;
+  mixVisibleCount=0;
+  $("#mixResultList").innerHTML="";
+  $("#mixResultList").scrollTop=0;
+  appendMixResults();
+  if(!window.activeMix && names[0]) selectMix(names[0],{deferInitialTree:true});
 }
+$("#mixResultList").addEventListener("scroll",e=>{
+  const list=e.currentTarget;
+  if(list.scrollTop+list.clientHeight>=list.scrollHeight-240) appendMixResults();
+},{passive:true});
+$("#mixResultList").addEventListener("focusin",e=>{
+  const item=e.target.closest("[data-target]");
+  if(item && item=== $("#mixResultList").children[mixVisibleCount-1]) appendMixResults();
+});
 $("#mixResultList").addEventListener("click",e=>{
   const b=e.target.closest("[data-target]");
   if(b) selectMix(b.dataset.target);
@@ -2290,10 +2324,11 @@ function restoreSharedState(){
   renderTree();
   requestAnimationFrame(syncTreeViewOnVisible);
 }
-function selectMix(name){
+function selectMix(name,{deferInitialTree=false}={}){
   window.activeMix=name;
-  lastMixQuery=null;
-  refreshMixResults();
+  const results=$("#mixResultList");
+  results.querySelector(".search-item.active")?.classList.remove("active");
+  [...results.children].find(button=>button.dataset.target===name)?.classList.add("active");
   const rs=recipesByTarget.get(name)||[];
   $("#mixDetailTitle").textContent=name;
   const mixBase=coreMap.get(name)?.base;
@@ -2304,7 +2339,14 @@ function selectMix(name){
   const targetCore=coreMap.get(name);
   if(targetCore?.base!=null) $("#treeTargetLv").value=targetCore.base;
   clearTreeManualLevels();
-  renderTree();
+  if(deferInitialTree&&initialTreeObserver){
+    initialTreePending=true;
+    initialTreeObserver.observe($("#treeViewport"));
+  }else{
+    initialTreePending=false;
+    initialTreeObserver?.disconnect();
+    renderTree();
+  }
 }
 
 // 결과 레벨은 서버가 계산한다. 일반 조합은 일반 믹스 계산식을 적용하고, 저렙/130 특수/실측 예외는 별도로 처리한다.
@@ -2376,9 +2418,12 @@ function resultText(result){
 }
 
 // 목표 결과 Lv에서 필요한 재료 Lv를 역산. 결과 코어 기렙은 하한으로 사용하지 않는다.
+const materialLevelCache=new WeakMap();
 function calcMaterialLevels(targetLv,rec){
   targetLv=Number(targetLv);
   if(!rec||!Number.isFinite(targetLv)) return null;
+  let cached=materialLevelCache.get(rec);
+  if(cached?.has(targetLv)) return cached.get(targetLv);
   const base1=recipeMaterialBase(rec,1),base2=recipeMaterialBase(rec,2);
   if(!Number.isFinite(base1)||!Number.isFinite(base2)) return null;
   const fixedLv1=fixedLevelOf(rec.mat1),fixedLv2=fixedLevelOf(rec.mat2);
@@ -2396,6 +2441,10 @@ function calcMaterialLevels(targetLv,rec){
 
   const targetBase=targetBaseOf(rec);
   if(!Number.isFinite(targetBase)||targetBase<=20) return null;
+  // 실측/특수 조합은 기존 검증 경로를 그대로 사용한다. 일반 조합만 동일한
+  // 공개 계산식으로 불가능한 후보를 먼저 걸러 비싼 전체 검증 호출을 줄인다.
+  const max1=recipeMaterialMax(rec,1),max2=recipeMaterialMax(rec,2);
+  const fastOrdinary=!samples.length&&!specialRecipeInfo(rec)&&Number.isFinite(max1)&&Number.isFinite(max2);
 
   // 새 카페식은 보정값이 재료별 기본만렙 비율에 따라 달라져 단순 +8/+9/+10 역산이 불가능하다.
   // 결과값은 항상 평균 이상이므로 가능한 합계 범위만 제한해 실제 calcMixResult로 전수 재검증한다.
@@ -2416,6 +2465,7 @@ function calcMaterialLevels(targetLv,rec){
     if(hi2<lo2) continue;
 
     for(let lv2=lo2;lv2<=hi2;lv2++){
+      if(fastOrdinary && Math.floor((lv1+lv2)/2)+Math.floor((Math.floor(lv1*100/max1)+Math.floor(lv2*100/max2))*0.05)!==targetLv) continue;
       const result=calcMixResult(rec,lv1,lv2);
       if(!resultContains(result,targetLv)) continue;
 
@@ -2428,6 +2478,9 @@ function calcMaterialLevels(targetLv,rec){
       if(!best||score<best.score) best={lv1,lv2,result,score,fixed1,fixed2,source:result.confidence};
     }
   }
+  if(!cached){cached=new Map();materialLevelCache.set(rec,cached);}
+  if(cached.size>=32) cached.delete(cached.keys().next().value);
+  cached.set(targetLv,best);
   return best;
 }
 function effectiveTreeLevel(path,autoLv){
@@ -2594,7 +2647,6 @@ let treeNaturalHeight=0;
 function measureTreeNaturalSize(){
   const root=$("#treeRoot");
   if(!root) return null;
-  root.style.transform="none";
   treeNaturalWidth=Math.max(1,Math.ceil(root.scrollWidth));
   treeNaturalHeight=Math.max(1,Math.ceil(root.scrollHeight));
   return {width:treeNaturalWidth,height:treeNaturalHeight};
@@ -2605,9 +2657,9 @@ function applyTreeScale(_scale,{center=true}={}){
   if(!viewport||!stage||!root) return;
   measureTreeNaturalSize();
   treeScale=1;
-  root.style.transform="none";
-  stage.style.width=Math.max(1,treeNaturalWidth)+"px";
-  stage.style.height=Math.max(1,treeNaturalHeight)+"px";
+  const width=Math.max(1,treeNaturalWidth)+"px",height=Math.max(1,treeNaturalHeight)+"px";
+  if(stage.style.width!==width) stage.style.width=width;
+  if(stage.style.height!==height) stage.style.height=height;
 
   // 믹스트리 탭이 숨겨진 상태에서 미리 렌더되면 clientWidth가 0에 가까워
   // 첫 진입 스크롤 위치가 엉뚱하게 잡힐 수 있다. 실제로 보일 때만 중앙 정렬한다.
@@ -2677,8 +2729,6 @@ function syncTreeViewOnVisible(){
     if(!viewport) return;
     if(viewport.clientWidth>80 && viewport.offsetParent!==null){
       applyTreeScale(1,{center:true});
-      // 첫 페인트 뒤 폰트/이미지 레이아웃이 한 번 더 안정된 다음 재확인
-      requestAnimationFrame(()=>applyTreeScale(1,{center:true}));
       return;
     }
     if(++tries<8) treeVisibleSyncRaf=requestAnimationFrame(run);
@@ -2687,6 +2737,7 @@ function syncTreeViewOnVisible(){
 }
 
 function renderTree({preserveView=false,anchorPath=""}={}){
+  if(initialTreePending){initialTreePending=false;initialTreeObserver?.disconnect();}
   const viewState=preserveView?captureTreeViewState(anchorPath):null;
   const name=$("#treeTarget").value.trim()||window.activeMix||"";
   if(!name || !recipesByTarget.has(name)){ $("#treeRoot").innerHTML='<div class="empty">조합식이 있는 헨치 이름을 입력하세요.</div>';return;}
@@ -3299,17 +3350,6 @@ initSavedHench();
 renderCoreTable();
 restoreSharedState();
 window.addEventListener("hashchange",restoreSharedState);
-// 숨겨진 탭은 클릭 이벤트 안에서 바로 무겁게 그리지 않습니다.
-// 브라우저가 완전히 한가할 때만 가볍게 미리 준비하여 실제 탭 클릭 INP를 낮춥니다.
-const warmHiddenViews=()=>{
-  if(!zonesRendered) renderZones();
-  if(!mixRendered) refreshMixResults();
-};
-if("requestIdleCallback" in window){
-  requestIdleCallback(warmHiddenViews,{timeout:3500});
-}else{
-  setTimeout(warmHiddenViews,1800);
-}
 initInquiry();
 </script>
 <!-- Cloudflare Web Analytics -->
