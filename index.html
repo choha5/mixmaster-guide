@@ -1151,6 +1151,7 @@ td{border-bottom-color:rgba(34,72,101,.48)}
       <p class="prep-message" id="prepMessage" role="status" aria-live="polite">목표 헨치를 선택해 주세요.</p>
       <div id="prepResults" hidden>
         <div class="prep-section"><h4>필요 헨치</h4><div class="prep-list" id="prepMaterials"></div></div>
+        <div class="prep-section"><h4>인챈트 준비물</h4><div class="prep-enchants" id="prepEnchants"></div></div>
       </div>
     </section>
   </main>
@@ -3274,7 +3275,7 @@ function calculateMixPrep(target, quantity, depth, choices, recipeMap, cores){
     for(const [name,count] of from) addCount(into,name,count);
   }
   function empty(){
-    return {crafted:new Map(),materials:new Map(),limited:new Set(),enchantStages:new Map(),issues:new Map(),enchantedMixes:0,mixedStageMixes:0};
+    return {crafted:new Map(),materials:new Map(),limited:new Set(),enchantNeeds:new Set(),issues:new Map()};
   }
   function expand(name,path,remaining,nodePath){
     if(++visits>10000) throw Error("조합 경로가 너무 복잡합니다.");
@@ -3308,20 +3309,18 @@ function calculateMixPrep(target, quantity, depth, choices, recipeMap, cores){
       return result;
     }
     result.crafted.set(name,1);
-    const stages=new Set([recipe.stage1,recipe.stage2].map(Number).filter(n=>Number.isInteger(n)&&n>0));
-    for(const stage of stages) addCount(result.enchantStages,stage,1);
-    if(stages.size) result.enchantedMixes=1;
-    if(stages.size>1) result.mixedStageMixes=1;
+    for(const [material,rawStage] of [[recipe.mat1,recipe.stage1],[recipe.mat2,recipe.stage2]]){
+      const stage=Number(rawStage), species=cores.get(material)?.species;
+      if(Number.isInteger(stage)&&stage>0&&species) result.enchantNeeds.add(`${species}|${stage}`);
+    }
     path.add(name);
     for(const [index,material] of [recipe.mat1,recipe.mat2].entries()){
       const sub=expand(material,path,remaining-1,nodePath+"."+index);
       mergeCounts(result.crafted,sub.crafted);
       mergeCounts(result.materials,sub.materials);
       for(const key of sub.limited) result.limited.add(key);
-      mergeCounts(result.enchantStages,sub.enchantStages);
+      for(const key of sub.enchantNeeds) result.enchantNeeds.add(key);
       for(const [key,reason] of sub.issues) result.issues.set(key,reason);
-      result.enchantedMixes+=sub.enchantedMixes;
-      result.mixedStageMixes+=sub.mixedStageMixes;
     }
     path.delete(name);
     return result;
@@ -3329,13 +3328,12 @@ function calculateMixPrep(target, quantity, depth, choices, recipeMap, cores){
   // 믹스트리의 표시 단계와 동일하게: 목표가 1단계, 화면 끝의 카드가 준비물이다.
   const unit=expand(target,new Set(),depth-1,"r");
   const scaled=empty();
-  for(const key of ["crafted","materials","enchantStages"]){
+  for(const key of ["crafted","materials"]){
     for(const [name,count] of unit[key]) addCount(scaled[key],name,count*quantity);
   }
+  scaled.enchantNeeds=new Set(unit.enchantNeeds);
   scaled.issues=unit.issues;
   scaled.limited=unit.limited;
-  scaled.enchantedMixes=unit.enchantedMixes*quantity;
-  scaled.mixedStageMixes=unit.mixedStageMixes*quantity;
   scaled.totalMix=[...scaled.crafted.values()].reduce((sum,n)=>sum+n,0);
   if(!Number.isSafeInteger(scaled.totalMix)) throw Error("계산 수량이 너무 큽니다.");
   scaled.target=target;
@@ -3375,6 +3373,9 @@ function visiblePrepCounts(result){
 function renderMixPrep(result){
   const visible=visiblePrepCounts(result);
   $("#prepMaterials").innerHTML=sortedPrepEntries(visible).map(([name,count])=>prepItemHtml(name,count)).join("")||'<div class="muted">표시할 헨치가 없습니다.</div>';
+  const enchantLabels=[...result.enchantNeeds].map(key=>{const [species,stage]=key.split("|");return {species,stage:Number(stage)}});
+  enchantLabels.sort((a,b)=>a.species.localeCompare(b.species,"ko")||a.stage-b.stage);
+  $("#prepEnchants").innerHTML=enchantLabels.map(({species,stage})=>`<span>${esc(species)} 인챈트 ${stage}단</span>`).join("")||'<span class="muted">필요한 인챈트가 없습니다.</span>';
   $("#prepResults").hidden=false;
   $("#prepMessage").textContent=result.issues.size?"일부 조합식이 미확인되었거나 순환되어 해당 지점에서 계산을 멈췄습니다.":result.depth+"단계 표시 헨치 "+visible.size+"종";
   if(result.issues.size) console.warn("[Mix prep] stopped paths",Object.fromEntries(result.issues));
