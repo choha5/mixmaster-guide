@@ -1430,12 +1430,21 @@ tbody tr:hover, tbody tr:nth-child(even):hover {
   gap: 13px;
 }
 
-.zone-card {
-  border: 1px solid var(--line);
+.zone-grid > .zone {
+  min-width: 0;
+  border: 1px solid rgba(75, 143, 177, 0.42);
   background: rgba(13, 23, 39, 0.88);
   border-radius: var(--tds-radius-xl);
   padding: 16px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.zone-grid > .zone h4 {
+  margin: 0 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(75, 143, 177, 0.3);
+  color: #e7f4fc;
+  font-size: 14px;
 }
 
 .zone-head {
