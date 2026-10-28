@@ -4385,7 +4385,7 @@ function calcMixResult(rec,lv1,lv2){
     return {valid:true,known:true,low,high,random:low!==high,bonus,confidence:"special",reason:"130 특수재료 규칙 · 실측 우선",base1,base2};
   }
 
-  // 일반 믹스 계산식: 평균은 버림, 각 재료의 현재Lv/기본만렙 비율도 각각 버림 후 5%를 다시 버림.
+  // 일반 믹스 계산식: 평균/재료 비율은 버림. 9~10단만 재료별 비율을 최대 100%로 제한한다.
   const max1=recipeMaterialMax(rec,1),max2=recipeMaterialMax(rec,2);
   if(!Number.isFinite(max1)||!Number.isFinite(max2)){
     return {valid:true,known:false,reason:"재료 기본만렙 정보 없음",base1,base2};
@@ -4394,8 +4394,9 @@ function calcMixResult(rec,lv1,lv2){
   const correction=RECIPE_LEVEL_CORRECTIONS.get(recipeKey(rec));
   const rawP1=Math.floor(lv1*100/max1);
   const rawP2=Math.floor(lv2*100/max2);
-  const p1=correction?.cappedMaterialSide===1?Math.min(rawP1,Number(correction.maxRatioPercent)):rawP1;
-  const p2=correction?.cappedMaterialSide===2?Math.min(rawP2,Number(correction.maxRatioPercent)):rawP2;
+  const limitTo100=mixStageOfBase(targetBase)>=9;
+  const p1=correction?.cappedMaterialSide===1?Math.min(rawP1,Number(correction.maxRatioPercent)):(limitTo100?Math.min(100,rawP1):rawP1);
+  const p2=correction?.cappedMaterialSide===2?Math.min(rawP2,Number(correction.maxRatioPercent)):(limitTo100?Math.min(100,rawP2):rawP2);
   const bonus=Math.floor((p1+p2)*0.05);
   const result=avg+bonus;
   return {valid:true,known:true,low:result,high:result,random:false,bonus,confidence:correction?"recipe-empirical":"verified",reason:correction?`${correction.evidence} · 조합별 보정 (전체 공식 아님)`:"카페 공개 믹스 계산식",base1,base2,max1,max2};
@@ -4460,7 +4461,15 @@ function calcMaterialLevels(targetLv,rec){
     if(hi2<lo2) continue;
 
     for(let lv2=lo2;lv2<=hi2;lv2++){
-      if(fastOrdinary && Math.floor((lv1+lv2)/2)+Math.floor((Math.floor(lv1*100/max1)+Math.floor(lv2*100/max2))*0.05)!==targetLv) continue;
+      if(fastOrdinary){
+        // 정방향과 동일한 보정으로 목표 Lv 후보를 검사한다.
+        const limitTo100=mixStageOfBase(targetBase)>=9;
+        const correction=RECIPE_LEVEL_CORRECTIONS.get(recipeKey(rec));
+        const rawP1=Math.floor(lv1*100/max1),rawP2=Math.floor(lv2*100/max2);
+        const p1=correction?.cappedMaterialSide===1?Math.min(rawP1,Number(correction.maxRatioPercent)):(limitTo100?Math.min(100,rawP1):rawP1);
+        const p2=correction?.cappedMaterialSide===2?Math.min(rawP2,Number(correction.maxRatioPercent)):(limitTo100?Math.min(100,rawP2):rawP2);
+        if(Math.floor((lv1+lv2)/2)+Math.floor((p1+p2)*0.05)!==targetLv) continue;
+      }
       const result=calcMixResult(rec,lv1,lv2);
       if(!resultContains(result,targetLv)) continue;
 
